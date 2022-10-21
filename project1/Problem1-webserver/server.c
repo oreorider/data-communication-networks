@@ -56,7 +56,7 @@ int main( int argc, char *argv[] ) {
   int sockfd, newsockfd, portno = PORT;
   socklen_t clilen;
   struct sockaddr_in serv_addr, cli_addr;
-  clilen = sizeof(cli_addr
+  clilen = sizeof(cli_addr);
 
   printf("encoding start \n");// We have implemented base64 encoding you just need to use this function
   char *token = base64_encode("20xx-xxxxx:password", strlen("20xx-xxxxx:password"));//you can change your userid
