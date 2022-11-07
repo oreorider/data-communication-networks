@@ -110,7 +110,7 @@ int main( int argc, char *argv[] ) {
     
   //it was mostly same as tutorial
   //in the while loop every time request comes we respond with respond function if valid
-
+  //add some random comment
   //TODO: authentication loop 40 % of score
   int bytes = 0;
   int authenticated = 0;
