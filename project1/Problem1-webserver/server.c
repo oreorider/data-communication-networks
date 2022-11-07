@@ -54,9 +54,13 @@ char password[] = "password";
 
 int main( int argc, char *argv[] ) {
   int sockfd, newsockfd, portno = PORT;
-  socklen_t clilen;
+  socklen_t addrlen;
   struct sockaddr_in serv_addr, cli_addr;
-  clilen = sizeof(cli_addr);
+  addrlen = sizeof(cli_addr);
+
+  int buffer_size = 1024;
+  char buf[buffer_size];
+  int ret;
 
   printf("encoding start \n");// We have implemented base64 encoding you just need to use this function
   char *token = base64_encode("20xx-xxxxx:password", strlen("20xx-xxxxx:password"));//you can change your userid
@@ -83,43 +87,89 @@ int main( int argc, char *argv[] ) {
 
   /* Initialize socket structure */
 
+  bzero((char*) &serv_addr, sizeof(serv_addr));
+  serv_addr.sin_family = AF_INET;
+  serv_addr.sin_addr.s_addr = INADDR_ANY;
+  serv_addr.sin_port = htons(portno);
+
+  if(bind(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0){
+    perror("bind failed");
+    exit(1);
+  }
   /* TODO : Now bind the host address using bind() call. 10% of score*/
     //it was mostly same as tutorial
 
+  if(listen(sockfd, 10)<0){
+    perror("listed failed");
+    exit(1);
+  }
   /* TODO : listen on socket you created  10% of score*/
 
 
   printf("Server is running on port %d\n", portno);
     
-    //it was mostly same as tutorial
-    //in the while loop every time request comes we respond with respond function if valid
+  //it was mostly same as tutorial
+  //in the while loop every time request comes we respond with respond function if valid
 
-    //TODO: authentication loop 40 % of score
-    while(1){
-      newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-      //TODO: accept connection
-      //TODO: send 401 message(more information about 401 message : https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication) and authentificate user
-      //close connection
-
-
+  //TODO: authentication loop 40 % of score
+  int bytes = 0;
+  int authenticated = 0;
+  char *auth_message = "HTTP/1.1 401 Unauthorized \r\nWWW-Authenticate: Basic realm = \"Access to the staging site\"";
+  while(1){
+    printf("o\n");
+    if((newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &addrlen))<0){
+      perror("accept error");
+      exit(1);
     }
-    //Respond loop
-    while (1) {
-        newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-        if ( newsockfd == -1 ){
-          perror("accept error");
-          exit(1);
-        }
-        //printf("test");
-        respond(newsockfd);
-      }
+    //TODO: accept connection
+    //TODO: send 401 message(more information about 401 message : https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication) and authentificate user
+    //close connection
+    
+    int length = strlen(auth_message);
 
+    if(authenticated == 0){//while not authenticated, send auth message to client
+      printf("n");
+      while(length > 0){//send the auth message to client
+        printf("send bytes : %d\n", bytes);
+        bytes = send(newsockfd, auth_message, length, 0);
+        length = length - bytes;
+      }
+    }
+    ret = read(newsockfd, buf, buffer_size);
+    if(ret > 0){//input from client read successfuly
+      for(int i=0; i<buffer_size; i++){
+        printf("%c", buf[i]);
+      }
+    }
+
+    //respond(newsockfd);
+
+  }
+  //Respond loop
+  while (1) {
+    newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &addrlen);
+    if ( newsockfd == -1 ){
+      perror("accept error");
+      exit(1);
+    }
+    //printf("test");
+    respond(newsockfd);
+  }
   return 0;
 }
 //TODO: complete respond function 40% of score
 int respond(int sock) {
-
-    
+  int bytes= 0;
+  char message[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html;\r\n\r\n<html><body>Hello World!</body></html>\r\n\r\n";
+  int length = strlen(message);
+  while(length > 0){
+    printf("send bytes : %d\n", bytes);
+    bytes = send(sock, message, length, 0);
+    length = length - bytes;
+  }
+  printf("close\n");
+  shutdown(sock, SHUT_RDWR);
+  close(sock);
   return 0;
 }
 
