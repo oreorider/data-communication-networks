@@ -133,6 +133,7 @@ int request_torrent_from_peer(char *peer, int port, unsigned int torrent_hash)
     sprintf(buf, "REQUEST_TORRENT %d %x %x", listen_port, id_hash, torrent_hash);
     send_socket(sockfd, buf, STRING_LEN);
     close_socket(sockfd);
+    //doesn't read incoming data?
     return 0;
 }
 
@@ -150,9 +151,9 @@ int push_torrent_to_peer(char *peer, int port, torrent_file *torrent)
     char buf[STRING_LEN] = {0};
     torrent_info info;
     copy_torrent_to_info (torrent, &info);
-    sprintf(buf, "PUSH_TORRENT %d %x %x", listen_port, id_hash, info.hash);
-    send_socket(sockfd, buf, STRING_LEN);
-    send_socket(sockfd, (char *)&info, sizeof(torrent_info));
+    sprintf(buf, "PUSH_TORRENT %d %x %x", listen_port, id_hash, info.hash); //create protocol message
+    send_socket(sockfd, buf, STRING_LEN);                                   //send protocol message
+    send_socket(sockfd, (char *)&info, sizeof(torrent_info));               //send actual torrent data
     close_socket(sockfd);
     return 0;
 }
@@ -163,6 +164,16 @@ int request_peers_from_peer(char *peer, int port, unsigned int torrent_hash)
     if (silent_mode == 0)
         printf ("INFO - COMMAND REQUEST_PEERS to peer %s:%d, Torrent %x \n"
             , peer, port, torrent_hash);
+    int sockfd = connect_socket(peer, port);
+    if (sockfd < 0) 
+    {
+        return -1;
+    }
+    char buf[STRING_LEN] = {0};
+    sprintf(buf, "REQUEST_PEERS %d %x %x", listen_port, id_hash, torrent_hash);
+    send_socket(sockfd, buf, STRING_LEN);
+    close_socket(sockfd);
+
     // TODO: Implement (5 Points)
     return 0;
 }
@@ -174,6 +185,26 @@ int push_peers_to_peer(char *peer, int port, torrent_file *torrent)
         printf ("INFO - COMMAND PUSH_PEERS list to peer %s:%d, Torrent %x \n"
         , peer, port, torrent->hash);
     // TODO: Implement (5 Points)
+    int sockfd = connect_socket(peer, port);
+    if (sockfd < 0) 
+    {
+        return -1;
+    }
+    int peer_idx = get_peer_idx(torrent, peer, port);
+    char temp_peer_ip [MAX_PEER_NUM][STRING_LEN];//2d array of char
+    int temp_peer_port [MAX_PEER_NUM];//array of int
+    for(int i=0; i<MAX_PEER_NUM; i++){
+        if( i != peer_idx){//make temp arrays hold data excluding peer/port
+            strcpy(temp_peer_ip[i], torrent->peer_ip[i]);
+            temp_peer_port[i] = torrent->peer_port[i];
+        }
+    }
+    char buf[STRING_LEN] = {0};
+    sprintf(buf, "PUSH_PEERS %d %x %x %d", listen_port, id_hash, torrent->num_peers);
+    send_socket(sockfd, buf, STRING_LEN);
+    send_socket(sockfd, temp_peer_ip[0], MAX_PEER_NUM * STRING_LEN);
+    send_socket(sockfd, temp_peer_port, sizeof(int) * MAX_PEER_NUM);
+    close_socket(sockfd);
     return 0;
 }
 
@@ -183,6 +214,15 @@ int request_block_info_from_peer(char *peer, int port, unsigned int torrent_hash
     if (silent_mode == 0)
         printf ("INFO - COMMAND REQUEST_BLOCK_INFO to peer %s:%d, Torrent %x\n"
         , peer, port, torrent_hash);
+    int sockfd = connect_socket(peer, port);
+    if (sockfd < 0) 
+    {
+        return -1;
+    }
+    char buf[STRING_LEN] = {0};
+    sprintf(buf, "REQUEST_BLOCK_INFO %d %x %x", listen_port, id_hash, torrent_hash);
+    send_socket(sockfd, buf, STRING_LEN);
+    close_socket(sockfd);
     // TODO: Implement (5 Points)
     return 0;
 }
@@ -194,6 +234,18 @@ int push_block_info_to_peer(char *peer, int port, torrent_file *torrent)
         printf ("INFO - COMMAND PUSH_BLOCK_INFO to peer %s:%d, Torrent %x\n"
         , peer, port, torrent->hash);
     // TODO: Implement (5 Points)
+    int sockfd = connect_socket(peer, port);
+    if (sockfd < 0) 
+    {
+        return -1;
+    }
+    char buf[STRING_LEN] = {0};
+    torrent_info info;
+    copy_torrent_to_info(torrent, &info);
+    sprintf(buf, "PUSH_BLOCK_INFO %d %x %x",listen_port, id_hash, info.hash);
+    send_socket(sockfd, buf, STRING_LEN);
+    send_socket(sockfd, info.block_info, MAX_BLOCK_NUM);
+    close_socket(sockfd);
     return 0;
 }
 
@@ -204,6 +256,17 @@ int request_block_from_peer(char *peer, int port, torrent_file *torrent, int blo
         printf ("INFO - COMMAND REQUEST_BLOCK %d to peer %s:%d, Torrent %x\n"
        , block_idx, peer, port , torrent->hash);
     // TODO: Implement (5 Points)
+    int sockfd = connect_socket(peer, port);
+    if (sockfd < 0) 
+    {
+        return -1;
+    }
+    char buf[STRING_LEN] = {0};
+    torrent_info info;
+    copy_torrent_to_info(torrent, &info);
+    sprintf(buf, "REQUEST_BLOCK %d %x %x %d", listen_port, id_hash, info.hash, block_idx);
+    send_socket(sockfd, buf, STRING_LEN);
+    close_socket(sockfd);
     return 0;
 }
 
@@ -215,6 +278,17 @@ int push_block_to_peer(char *peer, int port, torrent_file *torrent, int block_id
        , block_idx, peer, port , torrent->hash);
     // TODO: Implement (5 Points)
     // Hint: You can directly use the pointer to the block data for the send buffer of send_socket() call.
+    int sockfd = connect_socket(peer, port);
+    if (sockfd < 0) 
+    {
+        return -1;
+    }
+    char buf[STRING_LEN] = {0};
+    torrent_info info;
+    copy_torrent_to_info(torrent, &info);
+    sprintf(buf, "PUSH_BLOCK %d %x %x %d", listen_port, id_hash, info.hash, block_idx);
+    send_socket(sockfd, buf, STRING_LEN);
+    send_socket(sockfd, info.block_info[block_idx], info.block_size);
     return 0;
 }
 
@@ -234,13 +308,15 @@ int server_routine (int sockfd)
 
         // TODO: Parse command (HINT: Use strtok, strcmp, strtol, stroull, etc.) (5 Points)
         char *cmd;
-        int peer_port;
-        unsigned int peer_id_hash;
+        char *pEnd;
+        cmd = strtok(buf, " ");
+        int peer_port = atoi(strtok(NULL, " "));
+        unsigned int peer_id_hash = atoi(strktok(NULL, " "));
         if (silent_mode == 0)
             printf ("from peer %s:%d\n", peer, peer_port);
 
         // TODO: Check if command is sent from myself, and if it is, ignore the message. (HINT: use id_hash) (5 Points)
-
+        if(id_hash == peer_id_hash) return 0;
 
         // Take action based on command.
         // Dont forget to close the socket, and reset the peer_req_num of the peer that have sent the command to zero.
