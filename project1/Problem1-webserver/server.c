@@ -1,3 +1,4 @@
+#define _GNU_SOURCE 1
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -51,6 +52,30 @@ char password[] = "password";
 //It will be better if you run virtual machine or other device to run server
 //But you can also test server with opening terminal and run it on local IP 
 
+int parse(const char* line)
+{
+    /* Find out where everything is */
+    const char *start_of_path = strchr(line, ' ') + 1;
+    const char *start_of_query = strchr(start_of_path, '?');
+    const char *end_of_query = strchr(start_of_query, ' ');
+
+    /* Get the right amount of memory */
+    char path[start_of_query - start_of_path];
+    char query[end_of_query - start_of_query];
+
+    /* Copy the strings into our memory */
+    strncpy(path, start_of_path,  start_of_query - start_of_path);
+    strncpy(query, start_of_query, end_of_query - start_of_query);
+
+    /* Null terminators (because strncpy does not provide them) */
+    path[sizeof(path)] = 0;
+    query[sizeof(query)] = 0;
+
+    /*Print */
+    printf("%s\n", query, sizeof(query));
+    printf("%s\n", path, sizeof(path));
+}
+
 
 int main( int argc, char *argv[] ) {
   int sockfd, newsockfd, portno = PORT;
@@ -58,12 +83,13 @@ int main( int argc, char *argv[] ) {
   struct sockaddr_in serv_addr, cli_addr;
   addrlen = sizeof(cli_addr);
 
-  int buffer_size = 1024;
+  int buffer_size = 9000;
   char buf[buffer_size];
   int ret;
 
+  char auth[] = "admin:admin";
   printf("encoding start \n");// We have implemented base64 encoding you just need to use this function
-  char *token = base64_encode("20xx-xxxxx:password", strlen("20xx-xxxxx:password"));//you can change your userid
+  char *token = base64_encode(auth, strlen(auth));//you can change your userid
   printf("encoding end \n");
 
   //browser will repond with base64 encoded "userid:password" string 
@@ -112,11 +138,13 @@ int main( int argc, char *argv[] ) {
   //in the while loop every time request comes we respond with respond function if valid
   //add some random comment
   //TODO: authentication loop 40 % of score
-  int bytes = 0;
+  int bytes, offset;
+  bzero(buf, buffer_size);
+
   int authenticated = 0;
-  char *auth_message = "HTTP/1.1 401 Unauthorized \r\nWWW-Authenticate: Basic realm = \"Access to the staging site\"";
-  while(1){
-    printf("o\n");
+  
+  while(1){//authentication loop
+    
     if((newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &addrlen))<0){
       perror("accept error");
       exit(1);
@@ -124,52 +152,156 @@ int main( int argc, char *argv[] ) {
     //TODO: accept connection
     //TODO: send 401 message(more information about 401 message : https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication) and authentificate user
     //close connection
+
     
+    offset = 0;
+    bytes = 0;
+
+    do{
+      bytes = recv(newsockfd, buf+offset, 1500, 0);
+      offset += bytes;
+      if (strncmp(buf + offset - 4, "\r\n\r\n", 4) == 0) break; //if end of http
+    } while(bytes > 0);
+    printf("message received\n");
+
+    if(bytes < 0){
+      perror("receive error");
+      exit(1);
+    }
+    else if (bytes == 0){
+      perror("client disconneced unexpectedly");
+      exit(1);
+    }
+    
+    buf[offset] = 0;
+    printf("%s\n", buf);
+
+    char auth_message[] = "HTTP/1.1 401 Unauthorized \r\nWWW-Authenticate: Basic realm = \"Access to the staging site\"";
     int length = strlen(auth_message);
 
+    while(length > 0){//send 401 message
+      printf("send bytes : %d\n", bytes);
+      bytes = send(newsockfd, auth_message, length, 0);
+      length = length - bytes;
+    }
+    printf("close\n");
+    shutdown(newsockfd, SHUT_RDWR);
+    close(newsockfd);
+    if(authenticated == 1){
+      printf("authentication successful\n");
+      //send OK
+      
+      break;
+    }
+
     if(authenticated == 0){//while not authenticated, send auth message to client
-      printf("n");
-      while(length > 0){//send the auth message to client
-        printf("send bytes : %d\n", bytes);
-        bytes = send(newsockfd, auth_message, length, 0);
-        length = length - bytes;
+      //check if authentication successful
+      printf("token is : %s\n", token);
+      printf("auth not succecssful\n\n");
+      if(strstr(buf, token) != NULL){//token found inside the buffer
+        authenticated = 1;
       }
     }
-    ret = read(newsockfd, buf, buffer_size);
-    if(ret > 0){//input from client read successfuly
-      for(int i=0; i<buffer_size; i++){
-        printf("%c", buf[i]);
-      }
-    }
-
-    //respond(newsockfd);
-
   }
   //Respond loop
   while (1) {
-    newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &addrlen);
-    if ( newsockfd == -1 ){
+    printf("in respond loop\n");
+    if((newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &addrlen))<0){
       perror("accept error");
       exit(1);
     }
-    //printf("test");
     respond(newsockfd);
+    printf("close\n");
+    shutdown(newsockfd, SHUT_RDWR);
+    close(newsockfd);
   }
   return 0;
 }
 //TODO: complete respond function 40% of score
 int respond(int sock) {
-  int bytes= 0;
-  char message[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html;\r\n\r\n<html><body>Hello World!</body></html>\r\n\r\n";
-  int length = strlen(message);
+  int offset, bytes;
+  char receive_buffer[9000];
+  bzero(receive_buffer,9000);
+
+  offset = 0;
+  bytes = 0;
+  do {
+    // bytes < 0 : unexpected error
+    // bytes == 0 : client closed connection
+    bytes = recv(sock, receive_buffer + offset, 1500, 0);
+    offset += bytes;
+    // this is end of http request
+    if (strncmp(receive_buffer + offset - 4, "\r\n\r\n", 4) == 0) break;
+  } while (bytes > 0);
+
+  if (bytes < 0) {
+    printf("recv() error\n");
+    exit(1);
+  } else if (bytes == 0) {
+    printf("Client disconnected unexpectedly\n");
+    exit(1);
+  }
+
+  receive_buffer[offset] = 0;
+  printf("%s\n", receive_buffer);
+  char *path;
+
+  if(strstr(receive_buffer, "GET") != NULL){//if message has GET in it
+    char* first_space = strchr(receive_buffer, ' '); //first instance of ' '
+    char* second_space = strchr(first_space, ' ');//second instance of ' '
+
+    
+    path = malloc(sizeof(char) * (second_space - first_space));
+
+    /* Copy the strings into our memory */
+    strncpy(path, first_space,  second_space - first_space);
+
+    /* Null terminators (because strncpy does not provide them) */
+    path[sizeof(path)] = 0;
+
+  }
+
+  int length;
+  char *send_buffer;
+  FILE *sendFile;
+  if(path == '/') {
+    sendFile = fopen("index.html", "r");
+  }
+  printf("file opened\n");
+  if(sendFile == NULL){
+    perror("no file found");
+    exit(1);
+  }
+  fseek(sendFile, 0, SEEK_END);
+  //printf("seek1\n");
+  length = ftell(sendFile);
+  fseek(sendFile, 0, SEEK_SET);
+  //printf("seek2\n");
+  send_buffer = malloc(length);
+  if(send_buffer > 0){
+    fread(send_buffer, 1, length, sendFile);
+    //printf("reading buffer\n");
+  }
+  fclose(sendFile);
+  //printf("contents of buffer\n%s\n", send_buffer);
+  char *prefix = "HTTP/1.1 200 OK\r\nContent-Type: text/html;\r\n\r\n";
+  char *suffix = "\r\n\r\n";
+  char* message;
+  if(asprintf(&message,"%s%s%s", prefix, send_buffer, suffix) < 0){
+    //printf("contents of entire message with header and prefix\n%s\n", message);
+    printf("concat failed\n");
+  }
+  
+  bytes= 0;
+  
+  length = strlen(message);
+  printf("length of message %d\n", length);
   while(length > 0){
-    printf("send bytes : %d\n", bytes);
     bytes = send(sock, message, length, 0);
+    printf("send bytes : %d\n", bytes);
     length = length - bytes;
   }
-  printf("close\n");
-  shutdown(sock, SHUT_RDWR);
-  close(sock);
+  
   return 0;
 }
 
