@@ -52,28 +52,8 @@ char password[] = "password";
 //It will be better if you run virtual machine or other device to run server
 //But you can also test server with opening terminal and run it on local IP 
 
-int parse(const char* line)
-{
-    /* Find out where everything is */
-    const char *start_of_path = strchr(line, ' ') + 1;
-    const char *start_of_query = strchr(start_of_path, '?');
-    const char *end_of_query = strchr(start_of_query, ' ');
+int send_exception(int sock){
 
-    /* Get the right amount of memory */
-    char path[start_of_query - start_of_path];
-    char query[end_of_query - start_of_query];
-
-    /* Copy the strings into our memory */
-    strncpy(path, start_of_path,  start_of_query - start_of_path);
-    strncpy(query, start_of_query, end_of_query - start_of_query);
-
-    /* Null terminators (because strncpy does not provide them) */
-    path[sizeof(path)] = 0;
-    query[sizeof(query)] = 0;
-
-    /*Print */
-    printf("%s\n", query, sizeof(query));
-    printf("%s\n", path, sizeof(path));
 }
 
 
@@ -90,7 +70,7 @@ int main( int argc, char *argv[] ) {
   char auth[] = "admin:admin";
   printf("encoding start \n");// We have implemented base64 encoding you just need to use this function
   char *token = base64_encode(auth, strlen(auth));//you can change your userid
-  printf("encoding end \n");
+  printf("encoding end \n");  
 
   //browser will repond with base64 encoded "userid:password" string 
   //You should parse authentification information from http 401 responese and compare it
@@ -187,6 +167,7 @@ int main( int argc, char *argv[] ) {
     printf("close\n");
     shutdown(newsockfd, SHUT_RDWR);
     close(newsockfd);
+
     if(authenticated == 1){
       printf("authentication successful\n");
       //send OK
@@ -205,7 +186,7 @@ int main( int argc, char *argv[] ) {
   }
   //Respond loop
   while (1) {
-    printf("in respond loop\n");
+    printf("\n\nin respond loop\n");
     if((newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &addrlen))<0){
       perror("accept error");
       exit(1);
@@ -246,62 +227,196 @@ int respond(int sock) {
   printf("%s\n", receive_buffer);
   char *path;
 
+  //parsing string for path
   if(strstr(receive_buffer, "GET") != NULL){//if message has GET in it
-    char* first_space = strchr(receive_buffer, ' '); //first instance of ' '
+    printf("get found\n");
+    char* first_space = strchr(receive_buffer, ' ')+1; //first instance of ' '
     char* second_space = strchr(first_space, ' ');//second instance of ' '
-
+    printf("index is %ld\n", second_space - first_space);
     
-    path = malloc(sizeof(char) * (second_space - first_space));
+    path = malloc(second_space - first_space);
 
     /* Copy the strings into our memory */
     strncpy(path, first_space,  second_space - first_space);
+    //printf("path is |%s|\n", path);
 
     /* Null terminators (because strncpy does not provide them) */
-    path[sizeof(path)] = 0;
-
+    path[second_space-first_space] = 0;
+    //printf("path is |%s|\n", path);
   }
 
+  int is_png;
+  int is_css;
+  int is_js;
+  if(strstr(path, "png")!=NULL){
+    is_png = 1;
+  }
+  else if(strstr(path, "css")!=NULL){
+    is_css = 1;
+  }
+  else if(strstr(path, "js")!=NULL){
+    is_js = 1;
+  }
   int length;
-  char *send_buffer;
+  char* final_path;//final path which includes . in front
+  void *send_buffer;//buffer that holds data from server
+  char png_buffer[100000];//buffer for if file is png
   FILE *sendFile;
-  if(path == '/') {
+  if(strcmp(path, "/") == 0) {
+    printf("index.html opened\n");
     sendFile = fopen("index.html", "r");
   }
+  else{
+    asprintf(&final_path, ".%s", path);
+    printf("%s opened\n", final_path);
+    sendFile = fopen(final_path, "r");
+    /*
+    if(is_png == 0){
+      printf("non png file \n");
+      sendFile = fopen(final_path, "r");
+    }
+    else{//if file is png use rb
+      printf("png file\n");
+      sendFile = fopen(final_path, "rb");
+    }*/
+  }
+
+  free(path);
   printf("file opened\n");
   if(sendFile == NULL){
-    perror("no file found");
-    exit(1);
+    //if no file found, give 400 error
+    perror("no file found\n");
+    char error_message[] = "HTTP/1.1 400 Bad request";
+    int error_message_length = strlen(error_message);
+    while(error_message_length > 0){
+      bytes = send(sock, error_message, error_message_length, 0);
+      printf("send error message bytes : %d\n", bytes);
+      error_message_length = error_message_length - bytes;
+    }
+    return 0;
   }
-  fseek(sendFile, 0, SEEK_END);
-  //printf("seek1\n");
+
+  fseek(sendFile, 0, SEEK_END);//set file pointer to end to find length
   length = ftell(sendFile);
-  fseek(sendFile, 0, SEEK_SET);
-  //printf("seek2\n");
+  printf("length is %d\n", length);
+  fseek(sendFile, 0, SEEK_SET);//set file pointer to the beginning
+
+  /*
+  if(is_png == 0 ){
+    send_buffer = malloc(length);
+  }
+  if(is_png == 1){
+    fread(png_buffer, 1, length, sendFile);
+    //send_buffer = png_buffer;
+    printf("contents of png_buffer \n%s\n", png_buffer);
+  }*/
   send_buffer = malloc(length);
+  int send_buffer_length = length;
+  printf("send buffer length is %d\n", send_buffer_length);
   if(send_buffer > 0){
     fread(send_buffer, 1, length, sendFile);
-    //printf("reading buffer\n");
+    printf("reading from buffer\n");
   }
+  /*
+  if(is_png == 1){
+    for(int i=0; i<length; i++){
+      printf("%02X", send_buffer[i]);
+    }
+  }*/
+  printf("\n");
   fclose(sendFile);
-  //printf("contents of buffer\n%s\n", send_buffer);
-  char *prefix = "HTTP/1.1 200 OK\r\nContent-Type: text/html;\r\n\r\n";
+
+  char *prefix;
   char *suffix = "\r\n\r\n";
-  char* message;
-  if(asprintf(&message,"%s%s%s", prefix, send_buffer, suffix) < 0){
-    //printf("contents of entire message with header and prefix\n%s\n", message);
-    printf("concat failed\n");
+  if(is_png){//if PNG file
+    is_png = 0;
+    prefix = "HTTP/1.1 200 OK\r\nContent-Type: image/png;\r\n\r\n";
+    int prefix_length = strlen(prefix);
+    int suffix_length = strlen(suffix);
+    while(prefix_length > 0){
+      bytes = send(sock, prefix, prefix_length, 0);
+      printf("send prefix bytes : %d\n", bytes);
+      prefix_length = prefix_length - bytes;
+    }
+    while(length > 0){
+      bytes = send(sock, send_buffer, length, 0);
+      printf("send buffer bytes : %d\n", bytes);
+      length = length - bytes;
+    }
+    while(suffix_length > 0){
+      bytes = send(sock, suffix, suffix_length, 0);
+      printf("send suffix bytes : %d\n", bytes);
+      suffix_length = suffix_length - bytes;
+    }
+    return 0;
   }
+  else if(is_css){
+    prefix = "HTTP/1.1 200 OK\r\nContent-Type: text/css;\r\n\r\n";
+  }
+  else if(is_js){
+    prefix = "HTTP/1.1 200 OK\r\nContent-Type: text/html;\r\n\r\n";
+  }
+  else{
+    prefix = "HTTP/1.1 200 OK\r\nContent-Type: text/html;\r\n\r\n";
+  }
+  
+  char* message;
+  void* png_message;
+  //printf("prefix is %s\n", prefix);
+  //is_png = 0;
+  //fwrite(send_buffer, length, 1, stdin);
+  //send_buffer[length]=0;
+  if((asprintf(&message,"%s%s%s", prefix, (char*)send_buffer, suffix) < 0)){
+    //printf("contents of entire message with header and prefix\n%s\n", message);
+    printf("concat fail\n");
+  }
+  length = strlen(message);
+  /*
+  else{//cannot use asprintf for non text file, do manually
+    //printf("prefix is |%s|\n", prefix);
+    printf("prefix length %ld, send buffer length %d\n", strlen(prefix), send_buffer_length);
+    int first_part_length = strlen(prefix) + send_buffer_length+1;
+    printf("first part length %d\n", first_part_length);
+    void *first_part = malloc(first_part_length);//allocate space for prefix and file + 1 for terminating string
+    
+    printf("check1\n");
+    memcpy(first_part, prefix, strlen(prefix));//first part holds prefix
+    fwrite(first_part, 1, strlen(prefix), stdout);//print what is currently in first_part
+    printf("check2\n");
+    memcpy(first_part, send_buffer, send_buffer_length);//concat image onto prefix
+    printf("check3\n");
+    
+    //fwrite(first_part, 1, first_part_length, stdout);//print what is in firstpart after adding image
+
+    int message_length = first_part_length+strlen(suffix);
+    printf("check4\n");
+    png_message = malloc(message_length);//allocate memory for full message
+    printf("check5\n");
+    strncpy(png_message, first_part, first_part_length);
+    printf("check6\n");
+    strncat(png_message, suffix, strlen(suffix));
+    printf("check7\n");
+    length = message_length;
+    printf("full message length %d\n", length);
+    free(first_part);
+    printf("check8\n");
+  }
+  */
+  free(send_buffer);
+  //printf("check9\n");
   
   bytes= 0;
   
-  length = strlen(message);
+  //length = strlen(message);
   printf("length of message %d\n", length);
   while(length > 0){
     bytes = send(sock, message, length, 0);
     printf("send bytes : %d\n", bytes);
     length = length - bytes;
   }
-  
+  is_png = 0;
+  is_css = 0;
+  is_js = 0;
   return 0;
 }
 
