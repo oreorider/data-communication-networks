@@ -571,8 +571,10 @@ int client_routine ()
 {
     // Iterate through global torrent list and request missing blocks from peers.
     // Please DO Check network_functions.h for more information and required functions.
-    
     //printf("num torrents %d\n", num_torrents);
+
+    peer_linked_list *linked_list_for_tracking_if_requested = calloc (1, sizeof(peer_linked_list));
+
     for (int i = 0; i < num_torrents; i++)
     {
         //printf("enter client routine loop\n");
@@ -585,21 +587,25 @@ int client_routine ()
                 //printf("something\n");
                 for(int peer_idx = 0; peer_idx < torrent->num_peers; peer_idx++){
                     if(torrent->peer_block_info[peer_idx][block_idx] == 1){//if peer_idx has the block i want to request
+                        if (is_peer_requested_add_if_not(linked_list_for_tracking_if_requested, 
+                            torrent->peer_ip[peer_idx], torrent->peer_port[peer_idx]) == 1)
+                        {
+                            continue;
+                        }
                         request_block_from_peer(torrent->peer_ip[peer_idx], torrent->peer_port[peer_idx], torrent, block_idx);//request
                         torrent->peer_req_num[peer_idx]++;//increment peer_req_num
                     }
                     else{//request from peer_idx for block_idx fail
                         torrent->peer_req_num[peer_idx]++;
                         if(torrent->peer_req_num[peer_idx] > PEER_EVICTION_REQ_NUM){
+                            printf("===============REMOVE===============");
                             remove_peer_from_torrent(torrent, torrent->peer_ip[peer_idx], torrent->peer_port[peer_idx]);
                         }
                     }
                 }
             }
-            else{
-                //printf("block %d is already download\n", block_idx);
-            }
         }
+        
         // TODO:    Implement block request of the blocks that you don't have, to peers who have. (10 Points)
         //          Make sure that no more than 1 block data requests are sent to a same peer at once.
         // Hint:    Use peer_reqs array to keep track of which peers have been requested for a block.
@@ -608,6 +614,7 @@ int client_routine ()
         //          If the request has failed AND peer_req_num is more than PEER_EVICTION_REQ_NUM, 
         //          evict the peer from the torrent using remove_peer_from_torrent().
     }
+    free_peer_linked_list(linked_list_for_tracking_if_requested);
     
     // Iterate through global torrent list on "peer_update_interval_msec" and 
     // request block info update from all peers on the selected torrent.
@@ -631,14 +638,14 @@ int client_routine ()
         //printf("111\n");
         torrent_file *torrent = global_torrent_list[update_torrent_idx];
         for(int peer_idx = 0; peer_idx < torrent->num_peers; peer_idx++){
-            printf("REQUESTING BLOCK INFO IN CLIENT ROUTINE\n");
+            printf("\nREQUESTING BLOCK INFO IN CLIENT ROUTINE\n\n");
             request_block_info_from_peer(torrent->peer_ip[peer_idx],torrent->peer_port[peer_idx], torrent->hash);
         }
         printf("222\n");
         if(torrent->num_peers != 0){
             int r = rand() % torrent->num_peers;
             //printf("333\n");
-            printf("REQUESTING PEERLIST FROM %s IN CLIENT ROUTINE\n", torrent->peer_ip[r]);
+            printf("\nREQUESTING PEERLIST FROM %s IN CLIENT ROUTINE\n\n", torrent->peer_ip[r]);
             request_peers_from_peer(torrent->peer_ip[r], torrent->peer_port[r], torrent->hash);
         }
     }
@@ -718,9 +725,9 @@ int main(int argc, char *argv[])
         while (1) 
         {
             // Run server & client routines concurrently
-            server_routine_ans(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
-            client_routine_ans();           // Your implementation of client_routine() should be able to replace client_routine_ans() in this line.
-            server_routine_ans(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+            client_routine();           // Your implementation of client_routine() should be able to replace client_routine_ans() in this line.
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
 
             // Take some action every "SLEEP_TIME_MSEC" milliseconds
             if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
@@ -766,9 +773,9 @@ int main(int argc, char *argv[])
         while (1) 
         {
             // Run server & client routines concurrently
-            server_routine_ans(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
-            client_routine_ans();           // Your implementation of client_routine() should be able to replace client_routine_ans() in this line.
-            server_routine_ans(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+            client_routine();           // Your implementation of client_routine() should be able to replace client_routine_ans() in this line.
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
 
             // Take some action every "SLEEP_TIME_MSEC" milliseconds
             if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
