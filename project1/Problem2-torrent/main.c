@@ -202,7 +202,7 @@ int push_peers_to_peer(char *peer, int port, torrent_file *torrent)
     char buf[STRING_LEN] = {0};
     sprintf(buf, "PUSH_PEERS %d %x %x %d", listen_port, id_hash, torrent->num_peers);
     send_socket(sockfd, buf, STRING_LEN);
-    send_socket(sockfd, temp_peer_ip[0], MAX_PEER_NUM * STRING_LEN);
+    send_socket(sockfd, (char*)temp_peer_ip, MAX_PEER_NUM * STRING_LEN);
     send_socket(sockfd, temp_peer_port, sizeof(int) * MAX_PEER_NUM);
     close_socket(sockfd);
     return 0;
@@ -301,8 +301,8 @@ int server_routine (int sockfd)
     {
         char buf[STRING_LEN] = {0};                                             // Buffer for receiving commands
         recv_socket(newsockfd, buf, STRING_LEN);                                // Receive data from socket
-        char peer[INET_ADDRSTRLEN];                                             // Buffer for saving peer IP address
-        inet_ntop( AF_INET, &client_addr.sin_addr, peer, INET_ADDRSTRLEN );     // Convert IP address to string
+        char peer_ip[INET_ADDRSTRLEN];                                             // Buffer for saving peer IP address
+        inet_ntop( AF_INET, &client_addr.sin_addr, peer_ip, INET_ADDRSTRLEN );     // Convert IP address to string
         if (silent_mode == 0)
             printf ("INFO - SERVER: Received command %s ", buf);
 
@@ -310,10 +310,10 @@ int server_routine (int sockfd)
         char *cmd;
         char *pEnd;
         cmd = strtok(buf, " ");
-        int peer_port = atoi(strtok(NULL, " "));
-        unsigned int peer_id_hash = atoi(strktok(NULL, " "));
+        int peer_port = strtol(strtok(NULL, " "), NULL, 10);
+        unsigned int peer_id_hash = strtoul(strktok(NULL, " "), NULL, 16);
         if (silent_mode == 0)
-            printf ("from peer %s:%d\n", peer, peer_port);
+            printf ("from peer %s:%d\n", peer_ip, peer_port);
 
         // TODO: Check if command is sent from myself, and if it is, ignore the message. (HINT: use id_hash) (5 Points)
         if(id_hash == peer_id_hash) return 0;
@@ -332,12 +332,12 @@ int server_routine (int sockfd)
             torrent_file *torrent = get_torrent(torrent_hash);
             if (torrent != NULL) 
             {
-                push_torrent_to_peer(peer, peer_port, torrent);             // Send torrent to peer (HINT: This opens a new socket to client...)
-                if (get_peer_idx (torrent, peer, peer_port) < 0) 
+                push_torrent_to_peer(peer_ip, peer_port, torrent);             // Send torrent to peer (HINT: This opens a new socket to client...)
+                if (get_peer_idx (torrent, peer_ip, peer_port) < 0) //if peer does not have the torrent it is requesting
                 {
-                    add_peer_to_torrent(torrent, peer, peer_port, NULL);    
+                    add_peer_to_torrent(torrent, peer_ip, peer_port, NULL);//update the peers block information    
                 }
-                torrent->peer_req_num [get_peer_idx (torrent, peer, peer_port)] = 0;
+                torrent->peer_req_num [get_peer_idx (torrent, peer_ip, peer_port)] = 0;
             }
         }
         else if (strcmp(cmd, "PUSH_TORRENT") == 0) 
@@ -346,23 +346,29 @@ int server_routine (int sockfd)
             // Peer's Message: "PUSH_TORRENT [MY_LISTEN_PORT] [MY_ID_HASH] [TORRENT_HASH]"[TORRENT_INFO]
             // Hint: You might want to use get_torrent(), copy_info_to_torrent(), init_torrent_dynamic_data(), add_torrent(), or add_peer_to_torrent().
             unsigned int torrent_hash = strtoul(strtok(NULL, " "), NULL, 16);
-            torrent_file *torrent = get_torrent(torrent_hash);
-            if (torrent == NULL) 
+            torrent_file *torrent = get_torrent(torrent_hash);//checks global torrent list to see if torrent with torrent_hash exists
+            if (torrent == NULL) //if torrent not currently in global_torrent_list
             {
                 torrent = (torrent_file *)calloc(1, sizeof(torrent_file));
                 torrent_info info;
-                recv_socket(newsockfd, (char *)&info, sizeof(torrent_info));
-                copy_info_to_torrent(torrent, &info);
-                init_torrent_dynamic_data (torrent);
-                add_torrent(torrent);
-                add_peer_to_torrent(torrent, peer, peer_port, info.block_info);
-                torrent->peer_req_num [get_peer_idx (torrent, peer, peer_port)] = 0;
+                recv_socket(newsockfd, (char *)&info, sizeof(torrent_info));//read torrent_info
+                copy_info_to_torrent(torrent, &info);//creat torrent struct
+                init_torrent_dynamic_data (torrent);//initialize torrent with struct
+                add_torrent(torrent);//add to list
+                add_peer_to_torrent(torrent, peer_ip, peer_port, info.block_info);//add the peer who sent torrent to list
+                torrent->peer_req_num [get_peer_idx (torrent, peer_ip, peer_port)] = 0;//
             }
             close_socket(newsockfd);
         }
         // Refer to network_functions.h for more details on what to send and receive.
         else if (strcmp(cmd, "REQUEST_PEERS") == 0) 
         {
+            close_socket(newsockfd);
+            unsigned int torrent_hash = strtoul(strtok(NULL, " "), NULL, 16);
+            torrent_file* torrent = get_torrent(torrent_hash);
+            if(torrent != NULL){
+                push_peers_to_peer(peer_ip, peer_port, torrent);//give peer list
+            }
             // A peer requests a list of peers!
             // Peer's Message: "REQUEST_PEERS [MY_LISTEN_PORT] [MY_ID_HASH] [TORRENT_HASH]"
             // Hint: You might want to use  get_torrent(), push_peers_to_peer(), or add_peer_to_torrent().
@@ -375,9 +381,46 @@ int server_routine (int sockfd)
             // Hint: You might want to use get_torrent(), or add_peer_to_torrent().
             //       Dont forget to add the peer who sent the list(), if not already added.
             // TODO: Implement (5 Points)
+            unsigned int torrent_hash = strtoul(strtok(NULL, " "), NULL, 16);
+            int num_peers = strtol(strtok(NULL, " "), NULL, 10);
+            torrent_file *torrent = get_torrent(torrent_hash);
+            char temp_PEER_IPS[MAX_PEER_NUM * STRING_LEN];
+            char PEER_IPS[MAX_PEER_NUM][STRING_LEN];
+            //char temp_peer_ip[STRING_LEN];
+            char temp_PEER_PORTS[sizeof(int) * MAX_PEER_NUM];
+            //int PEER_PORTS[MAX_PEER_NUM];
+            //char temp_peer_port[sizeof(int)];
+            
+            recv_socket(newsockfd, temp_PEER_IPS, MAX_PEER_NUM * STRING_LEN);//read PEER_IPS
+            recv_socket(newsockfd, temp_PEER_PORTS, sizeof(int) * MAX_PEER_NUM);//read PEER_PORTS
+            memcpy(PEER_IPS, temp_PEER_IPS, MAX_PEER_NUM * STRING_LEN);//remake PEER_IPS into 2d array
+            int PEER_PORTS[MAX_PEER_NUM] = (int*)temp_PEER_PORTS;//remake PEER_PORTS into array of integers
+            
+            for(int i=0; i<MAX_PEER_NUM; i++){
+                request_block_info_from_peer(PEER_IPS[i], PEER_PORTS[i], torrent_hash);
+                //TODO: RECEIVE BLOCK INFO using recv_socket, and add_peer_to_torrent
+                
+                add_peer_to_torrent(torrent, PEER_IPS[i], PEER_PORTS[i], )
+            }
+            /*
+            for(int i=0; i<MAX_PEER_NUM*STRING_LEN; i++){
+                temp_peer_ip[i] = temp_PEER_IPS[i%STRING_LEN];
+                if(i%STRING_LEN == STRING_LEN-1){//temp_peer_ip holds ip address
+                    temp_peer_port[3] = temp_PEER_PORTS[]
+                    add_peer_to_torrent(torrent, temp_peer_ip, )
+                }
+                
+                
+            }*/
         }
         else if (strcmp(cmd, "REQUEST_BLOCK_INFO") == 0) 
         {
+            close_socket(newsockfd);
+            unsigned int torrent_hash = strtoul(strtok(NULL, " "), NULL, 16);
+            torrent_file* torrent = get_torrent(torrent_hash);
+            if(torrent != NULL){//torrent exists
+                
+            }
             // A peer requests your block info!
             // Peer's Message: "REQUEST_BLOCK_INFO [MY_LISTEN_PORT] [MY_ID_HASH] [TORRENT_HASH]"
             // Hint: You might want to use  get_torrent(), push_block_info_to_peer(), or add_peer_to_torrent().
