@@ -292,7 +292,7 @@ int push_block_to_peer(char *peer, int port, torrent_file *torrent, int block_id
     return 0;
 }
 
-int server_routine (int sockfd)
+int server_routine (int sockfd, char* my_ip, int my_portnumber)
 {
     struct sockaddr_in client_addr;
     socklen_t slen = sizeof(client_addr);
@@ -396,38 +396,48 @@ int server_routine (int sockfd)
             memcpy(PEER_IPS, temp_PEER_IPS, MAX_PEER_NUM * STRING_LEN);//remake PEER_IPS into 2d array
             int PEER_PORTS[MAX_PEER_NUM] = (int*)temp_PEER_PORTS;//remake PEER_PORTS into array of integers
             
-            for(int i=0; i<MAX_PEER_NUM; i++){
-                request_block_info_from_peer(PEER_IPS[i], PEER_PORTS[i], torrent_hash);
-                //TODO: RECEIVE BLOCK INFO using recv_socket, and add_peer_to_torrent
-                
-                add_peer_to_torrent(torrent, PEER_IPS[i], PEER_PORTS[i], )
-            }
-            /*
-            for(int i=0; i<MAX_PEER_NUM*STRING_LEN; i++){
-                temp_peer_ip[i] = temp_PEER_IPS[i%STRING_LEN];
-                if(i%STRING_LEN == STRING_LEN-1){//temp_peer_ip holds ip address
-                    temp_peer_port[3] = temp_PEER_PORTS[]
-                    add_peer_to_torrent(torrent, temp_peer_ip, )
+            for(int i=0; i<num_peers; i++){
+                if((strcmp(PEER_IPS[i], my_ip) != 0) && (PEER_PORTS[i] != my_portnumber)){//dont add peer if same ip/port as myself
+                    if(get_peer_idx(torrent, peer_ip, peer_port) < 0){//if peer ip/port not already in list
+                        add_peer_to_torrent(torrent, PEER_IPS[i], PEER_PORTS[i], NULL);//add peer to list
+                    }
                 }
-                
-                
-            }*/
+            }
+            close_socket(newsockfd);
         }
-        else if (strcmp(cmd, "REQUEST_BLOCK_INFO") == 0) 
+        else if (strcmp(cmd, "REQUEST_BLOCK_INFO") == 0)//peer asks to see what blocks I have
         {
             close_socket(newsockfd);
             unsigned int torrent_hash = strtoul(strtok(NULL, " "), NULL, 16);
             torrent_file* torrent = get_torrent(torrent_hash);
             if(torrent != NULL){//torrent exists
-                
+                /*
+                if(get_peer_idx(torrent, peer_ip, peer_port) == -1){//if peer not in ip/port list
+                    add_peer_to_torrent(torrent, peer_ip, peer_port, NULL);//add peer to list
+                }*/
+                push_block_info_to_peer(peer_ip, peer_port, torrent);//send peer block info
             }
             // A peer requests your block info!
             // Peer's Message: "REQUEST_BLOCK_INFO [MY_LISTEN_PORT] [MY_ID_HASH] [TORRENT_HASH]"
             // Hint: You might want to use  get_torrent(), push_block_info_to_peer(), or add_peer_to_torrent().
             // TODO: Implement (5 Points)
         }
-        else if (strcmp(cmd, "PUSH_BLOCK_INFO") == 0)
+        else if (strcmp(cmd, "PUSH_BLOCK_INFO") == 0)//peer gives me list of blocks they own for a torrent file
         {
+            char temp_BLOCK_INFO[MAX_BLOCK_NUM];
+            unsigned int torrent_hash = strtoul(strtok(NULL, " "), NULL, 16);
+            torrent_file *torrent = get_torrent(torrent_hash);
+            recv_socket(newsockfd, temp_BLOCK_INFO, MAX_BLOCK_NUM);//receive data
+            int peer_in_list = get_peer_idx(torrent, peer_ip, peer_port);
+
+            if(peer_in_list != -1){//if the peer that sent me the list is NOT in my peerlist
+                add_peer_to_torrent(torrent, peer_ip, peer_port, NULL);//add peer to my ip, port lists
+            }
+            for(int i=0; i<MAX_BLOCK_NUM; i++){
+                torrent->peer_block_info[peer_in_list][i] = temp_BLOCK_INFO[i];//update my peer_block_info
+            }
+            
+            close_socket(newsockfd);
             // A peer sends its block info!
             // Peer's Message: "PUSH_BLOCK_INFO [MY_LISTEN_PORT] [MY_ID_HASH] [TORRENT_HASH]"[BLOCK_INFO]
             // Hint: You might want to use get_torrent(), update_peer_block_info(), or add_peer_to_torrent().
@@ -435,6 +445,17 @@ int server_routine (int sockfd)
         }
         else if (strcmp(cmd, "REQUEST_BLOCK") == 0) 
         {
+            close_socket(newsockfd);
+            unsigned int torrent_hash = strtoul(strtok(NULL, " "), NULL, 16);
+            int block_index = strol(strtok(NULL, " "), NULL, 10);
+            torrent_file *torrent = get_torrent(torrent_hash);
+            if(torrent != NULL){
+                if(get_peer_idx(torrent, peer_ip, peer_port) == -1){//if the peer that is requesting the block is not in my list
+                    add_peer_to_torrent(torrent, peer_ip, peer_port, NULL);//add peer to my ip/port list
+                }
+                push_block_to_peer(peer_ip, peer_port, torrent, block_index);
+            }
+            
             // A peer requests a block data!
             // Peer's Message: "REQUEST_BLOCK [MY_LISTEN_PORT] [MY_ID_HASH] [TORRENT_HASH] [BLOCK_INDEX]"
             // Hint: You might want to use get_torrent(), push_block_to_peer(), or add_peer_to_torrent().
@@ -442,6 +463,17 @@ int server_routine (int sockfd)
         }
         else if (strcmp(cmd, "PUSH_BLOCK") == 0) 
         {
+            unsigned int torrent_hash = strtoul(strtok(NULL, " "), NULL, 16);
+            torrent_file *torrent = get_torrent(torrent_hash);
+            char temp_BLOCK_DATA[torrent->block_size];
+            int block_index = strol(strtok(NULL, " "), NULL, 10);
+            recv_socket(newsockfd, temp_BLOCK_DATA, torrent->block_size);
+            save_torrent_into_file(torrent, torrent->name);
+            torrent->downloaded_block_num++;
+            torrent->block_info[block_index] = '1';
+            add_peer_to_torrent(torrent, peer_ip, peer_port, ) 
+            
+            //save_torrent_into_file(torrent, )
             // A peer sends a block data!
             // Peer's Message: "PUSH_BLOCK [MY_LISTEN_PORT] [MY_ID_HASH] [TORRENT_HASH] [BLOCK_INDEX]"[BLOCK_DATA]
             // Hint: You might want to use get_torrent(), save_torrent_into_file(), update_peer_block_info(), or add_peer_to_torrent().
@@ -578,9 +610,9 @@ int main(int argc, char *argv[])
         while (1) 
         {
             // Run server & client routines concurrently
-            server_routine_ans(sockfd);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
-            client_routine_ans();           // Your implementation of client_routine() should be able to replace client_routine_ans() in this line.
-            server_routine_ans(sockfd);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+            client_routine();           // Your implementation of client_routine() should be able to replace client_routine_ans() in this line.
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode -1);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
 
             // Take some action every "SLEEP_TIME_MSEC" milliseconds
             if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
@@ -621,9 +653,9 @@ int main(int argc, char *argv[])
         while (1) 
         {
             // Run server & client routines concurrently
-            server_routine_ans(sockfd);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
             client_routine_ans();           // Your implementation of client_routine() should be able to replace client_routine_ans() in this line.
-            server_routine_ans(sockfd);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);     // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
 
             // Take some action every "SLEEP_TIME_MSEC" milliseconds
             if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
