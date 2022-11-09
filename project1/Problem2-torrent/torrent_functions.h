@@ -68,6 +68,20 @@ struct torrent_info
     char block_info [MAX_BLOCK_NUM];
 };
 
+
+// Linked list of peers
+typedef struct peer_linked_list
+{
+    char ip[STRING_LEN];
+    int port;
+    struct peer_linked_list *next;
+} peer_linked_list;
+// Returns 1 if the peer is already in the linked list(requested), 0 otherwise. Also adds the peer to the linked list.
+int is_peer_requested_add_if_not(peer_linked_list *peer_list, char *ip, int port);
+// Function to free the linked list.
+void free_peer_linked_list(peer_linked_list *peer_list);
+
+
 // RETURN VALUES: Functions with integer return values return 0 on success, and -1 on failure, unless otherwise specified.
 
 // Sleeps for milliseconds

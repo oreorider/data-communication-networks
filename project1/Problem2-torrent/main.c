@@ -569,6 +569,7 @@ int server_routine (int sockfd, char* my_ip, int my_portnumber)
 
 int client_routine ()
 {
+    if(num_torrents == 0) return 0;
     // Iterate through global torrent list and request missing blocks from peers.
     // Please DO Check network_functions.h for more information and required functions.
     //printf("num torrents %d\n", num_torrents);
@@ -660,7 +661,7 @@ int is_ip_valid(char *ipAddress)
     int result = inet_pton(AF_INET, ipAddress, &(sa.sin_addr));
     return (result != 0);
 }
-
+/*
 int main(int argc, char *argv[])
 {
     srand(time(NULL));
@@ -791,6 +792,708 @@ int main(int argc, char *argv[])
                 // print_all_torrents();
                 print_torrent_status ();
                 printf("=========================request test.pdf=============================\n");
+                counter++;
+            }
+        }
+        close_socket(sockfd);
+    }
+    return 0;
+}
+*/
+/*
+int main(int argc, char *argv[])
+{
+    // Input parsing
+    // Enter IP of the seeder in the first argument. Select peer mode (1 or 2) in the second argument.
+    if (argc != 3)
+    {
+        printf("Invalid number of arguments. Usage: ./peer <SEEDER IP> <MODE 1 or 2>\n");
+        return 0;
+    }
+    int mode = atoi(argv[2]);
+    char *seeder_ip = argv[1];
+    if (mode != 1 && mode != 2 && mode != 3 && mode != 4)
+    {
+        printf("Invalid mode. Usage: ./peer <SEEDER IP> <MODE 1 or 2>\n");
+        return 0;
+    }
+    if (is_ip_valid(seeder_ip) == 0)
+    {
+        printf("Invalid IP address. Usage: ./peer <SEEDER IP> <MODE 1 or 2>\n");
+        return 0;
+    }
+    if (mode == 1)
+    {
+        printf("INFO - Running in peer mode 1. Will connect to seeder %s:%d\n", seeder_ip, DEFAULT_PORT+mode-1);
+    }
+    else if (mode == 2)
+    {
+        printf("INFO - Running in peer mode 2. Will connect to seeder %s:%d\n", seeder_ip, DEFAULT_PORT+mode-1);
+    }
+    else if (mode ==3 ){
+        printf("INFO - Running in peer mode 3. Will connect to seeder %s:%d\n", seeder_ip, DEFAULT_PORT+mode-1);
+    }
+    else if (mode == 4 ){
+        printf("INFO - Running in peer mode 4. Will connect to seeder %s:%d\n", seeder_ip, DEFAULT_PORT+mode-1);
+    }
+
+    silent_mode = 0; // Set to 0 to enable debug messages.
+    unsigned int start_time = 0, counter = 0;
+
+    unsigned int hash_1 = 0x279cf7a5; // Hash for snu_logo_torrent.png
+    unsigned int hash_2 = 0x9b7a2926; // Hash for music_torrent.mp3
+    unsigned int hash_3 = 0x3dfd2916; // Hash for text_file_torrent.txt
+    unsigned int hash_4 = 0x1f77b213; // Hash for NXC_Lab_intro_torrent.pdf
+
+    // Peer 1 - (Port 12781)
+    if (mode == 1)
+    {
+        // Make some files into torrents
+        make_file_into_torrent("text_file_torrent.txt", "text_file.txt");         // HASH: 0x3dfd2916
+        make_file_into_torrent("NXC_Lab_intro_torrent.pdf", "NXC_Lab_intro.pdf"); // HASH: 0x1f77b213
+        // Initialize listening socket
+        int sockfd = listen_socket(DEFAULT_PORT);
+        if (sockfd < 0)
+        {
+            return -1;
+        }
+        // Wait 5 seconds before starting
+        for (int countdown = 5; countdown > 0; countdown--)
+        {
+            printf("Starting in %d seconds...\r", countdown);
+            fflush(stdout);
+            sleep_ms(1000);
+        }
+        while (1)
+        {
+            // Run server & client routines concurrently
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1); // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+            client_routine();                                       // Your implementation of client_routine() should be able to replace client_routine_ans() in this line.
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1); // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+
+            // Take some action every "SLEEP_TIME_MSEC" milliseconds
+            if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
+            {
+                if (1 == counter)
+                {
+                    // Request torrents from seeder (peer 2), using their hash values
+                    request_from_hash(hash_1, seeder_ip, DEFAULT_PORT + 1); // Hash for snu_logo_torrent.png
+                    request_from_hash(hash_2, seeder_ip, DEFAULT_PORT + 1); // Hash for music_torrent.mp3
+                }
+                start_time = get_time_msec();
+                // print_all_torrents();
+                print_torrent_status();
+                counter++;
+            }
+        }
+        close_socket(sockfd);
+    }
+    // Peer 2 - (Port 12782)
+    else if (mode == 2)
+    {
+        // Make some files into torrents
+        make_file_into_torrent("snu_logo_torrent.png", "snu_logo.png"); // HASH: 0x279cf7a5
+        make_file_into_torrent("music_torrent.mp3", "music.mp3");       // HASH: 0x9b7a2926 (source: https://www.youtube.com/watch?v=9PRnPdgNhMI)
+        // Initialize listening socket
+        int sockfd = listen_socket(DEFAULT_PORT + 1);
+        if (sockfd < 0)
+        {
+            return -1;
+        }
+        // Wait 5 seconds before starting
+        for (int countdown = 5; countdown > 0; countdown--)
+        {
+            printf("Starting in %d seconds...\r", countdown);
+            fflush(stdout);
+            sleep_ms(1000);
+        }
+        while (1)
+        {
+            // Run server & client routines concurrently
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1); // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+            client_routine();                                       // Your implementation of client_routine() should be able to replace client_routine_ans() in this line.
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1); // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+
+            // Take some action every "SLEEP_TIME_MSEC" milliseconds
+            if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
+            {
+                if (1 == counter)
+                {
+                    // Request torrents from seeder (peer 1), using their hash values
+                    request_from_hash(hash_3, seeder_ip, DEFAULT_PORT); // Hash for text_file_torrent.txt
+                    request_from_hash(hash_4, seeder_ip, DEFAULT_PORT); // Hash for NXC_Lab_intro_torrent.pdf
+                }
+                start_time = get_time_msec();
+                // print_all_torrents();
+                print_torrent_status();
+                counter++;
+            }
+        }
+        close_socket(sockfd);
+    }
+    else if (mode == 3)
+    {
+        // Make some files into torrents
+        make_file_into_torrent("text_file_torrent.txt", "text_file.txt");         // HASH: 0x3dfd2916
+        make_file_into_torrent("music_torrent.mp3", "music.mp3");       // HASH: 0x9b7a2926 (source: https://www.youtube.com/watch?v=9PRnPdgNhMI)
+        // Initialize listening socket
+        int sockfd = listen_socket(DEFAULT_PORT + 2);
+        if (sockfd < 0)
+        {
+            return -1;
+        }
+        // Wait 5 seconds before starting
+        for (int countdown = 5; countdown > 0; countdown--)
+        {
+            printf("Starting in %d seconds...\r", countdown);
+            fflush(stdout);
+            sleep_ms(1000);
+        }
+        while (1)
+        {
+            // Run server & client routines concurrently
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1); // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+            client_routine();                                       // Your implementation of client_routine() should be able to replace client_routine_ans() in this line.
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1); // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+
+            // Take some action every "SLEEP_TIME_MSEC" milliseconds
+            if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
+            {
+                if (1 == counter)
+                {
+                    // Request torrents from seeder (peer 1), using their hash values
+                    //request_from_hash(hash_1, seeder_ip, DEFAULT_PORT); // Hash for text_file_torrent.txt
+                    //request_from_hash(hash_4, seeder_ip, DEFAULT_PORT); // Hash for NXC_Lab_intro_torrent.pdf
+                }
+                start_time = get_time_msec();
+                // print_all_torrents();
+                print_torrent_status();
+                counter++;
+            }
+        }
+        close_socket(sockfd);
+    }
+    else if (mode == 4)
+    {
+        // Make some files into torrents
+        make_file_into_torrent("music_torrent.mp3", "music.mp3");       // HASH: 0x9b7a2926 (source: https://www.youtube.com/watch?v=9PRnPdgNhMI)
+        // Initialize listening socket
+        int sockfd = listen_socket(DEFAULT_PORT + 3);
+        if (sockfd < 0)
+        {
+            return -1;
+        }
+        // Wait 5 seconds before starting
+        for (int countdown = 5; countdown > 0; countdown--)
+        {
+            printf("Starting in %d seconds...\r", countdown);
+            fflush(stdout);
+            sleep_ms(1000);
+        }
+        //printf("test\n");
+        while (1)
+        {
+            // Run server & client routines concurrently
+            //printf("one\n");
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1); // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+            //printf("two\n");
+            client_routine();               
+                                    // Your implementation of client_routine() should be able to replace client_routine_ans() in this line.
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1); // Your implementation of server_routine() should be able to replace server_routine_ans() in this line.
+            //printf("three\n");
+            // Take some action every "SLEEP_TIME_MSEC" milliseconds
+            if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
+            {
+                if (1 == counter)
+                {
+                    // Request torrents from seeder (peer 1), using their hash values
+                    //printf("four\n");
+                    request_from_hash(hash_1, seeder_ip, DEFAULT_PORT + 1); // Hash for snu_logo_torrent.png
+                    request_from_hash(hash_3, seeder_ip, DEFAULT_PORT + 2); // Hash for text_file_torrent.txt
+                    request_from_hash(hash_4, seeder_ip, DEFAULT_PORT+2); // Hash for NXC_Lab_intro_torrent.pdf
+                    //printf("five\n");
+                    //request_from_hash(hash_2, seeder_ip, DEFAULT_PORT + 2); // Hash for music_torrent.mp3
+                }
+                start_time = get_time_msec();
+                // print_all_torrents();
+                print_torrent_status();
+                counter++;
+            }
+        }
+        close_socket(sockfd);
+    }
+    return 0;
+}*/
+/*
+int main(int argc, char *argv[])
+{
+    // Input parsing
+    // Enter IP of the seeder in the first argument. Select peer mode (1 or 2) in the second argument.
+    if (argc != 3) 
+    {
+        printf ("Invalid number of arguments. Usage: ./peer <SEEDER IP> <MODE 1 or 2>\n");
+        return 0;
+    }    
+    int mode = atoi(argv[2]);
+    char *seeder_ip = argv[1];
+    // if (mode != 1 && mode != 2)
+    if(mode < 1 || 4 < mode)
+    {
+        // printf ("Invalid mode. Usage: ./peer <SEEDER IP> <MODE 1 or 2>\n");
+        printf ("Invalid mode. Usage: ./peer <SEEDER IP> <MODE 1 or 2 or 3 or 4>\n");
+        return 0;
+    }
+    if (is_ip_valid(seeder_ip) == 0)
+    {
+        // printf ("Invalid IP address. Usage: ./peer <SEEDER IP> <MODE 1 or 2>\n");
+        printf ("Invalid IP address. Usage: ./peer <SEEDER IP> <MODE 1 or 2 or 3 or 4>\n");
+        return 0;
+    }
+    // if (mode == 1)
+    // {
+    //     printf ("INFO - Running in peer mode 1. Will connect to seeder %s:%d\n", seeder_ip, DEFAULT_PORT + 1);
+    // }
+    // else
+    // {
+    //     printf ("INFO - Running in peer mode 2. Will connect to seeder %s:%d\n", seeder_ip, DEFAULT_PORT);
+    // }
+    printf ("INFO - Running in peer mode %d. Will connect to seeder %s:%d\n", mode, seeder_ip, DEFAULT_PORT + mode - 1);
+
+
+    silent_mode = 0; // Set to 0 to enable debug messages.
+    unsigned int start_time = 0, counter = 0;
+
+    unsigned int hash_1 = 0x279cf7a5; // Hash for snu_logo_torrent.png
+    unsigned int hash_2 = 0x9b7a2926; // Hash for music_torrent.mp3
+    unsigned int hash_3 = 0x3dfd2916; // Hash for text_file_torrent.txt
+    unsigned int hash_4 = 0x1f77b213; // Hash for NXC_Lab_intro_torrent.pdf
+
+    // Peer 1 - (Port 12781)
+    if (mode == 1)
+    {
+        // Make some files into torrents
+        // make_file_into_torrent("text_file_torrent.txt", "text_file.txt");           // HASH: 0x3dfd2916
+        make_file_into_torrent("NXC_Lab_intro_torrent.pdf", "NXC_Lab_intro.pdf");   // HASH: 0x1f77b213
+        // Initialize listening socket
+        int sockfd = listen_socket(DEFAULT_PORT);
+        if (sockfd < 0) 
+        {
+            return -1;
+        }
+        // Wait 5 seconds before starting
+        for (int countdown = 5; countdown > 0; countdown--) 
+        {
+            printf("Starting in %d seconds...\r", countdown);
+            fflush(stdout);
+            sleep_ms(1000);
+        }
+        while (1) 
+        {
+            // Run server & client routines concurrently
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+            client_routine();
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+
+            // Take some action every "SLEEP_TIME_MSEC" milliseconds
+            if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
+            {
+                if (1 == counter) 
+                {
+                    // Request torrents from seeder (peer 2), using their hash values
+                    request_from_hash (hash_1, seeder_ip, DEFAULT_PORT + 1); // Hash for snu_logo_torrent.png
+                    request_from_hash (hash_2, seeder_ip, DEFAULT_PORT + 1); // Hash for music_torrent.mp3
+                    request_from_hash (hash_3, seeder_ip, DEFAULT_PORT + 1); // Hash for text_file_torrent.txt
+
+                    // Request torrents from seeder (peer 3), using their hash values
+                    request_from_hash (hash_1, seeder_ip, DEFAULT_PORT + 2); // Hash for snu_logo_torrent.png
+                    request_from_hash (hash_2, seeder_ip, DEFAULT_PORT + 2); // Hash for music_torrent.mp3
+                    request_from_hash (hash_3, seeder_ip, DEFAULT_PORT + 2); // Hash for text_file_torrent.txt
+
+                    // Request torrents from seeder (peer 4), using their hash values
+                    request_from_hash (hash_1, seeder_ip, DEFAULT_PORT + 3); // Hash for snu_logo_torrent.png
+                    request_from_hash (hash_2, seeder_ip, DEFAULT_PORT + 3); // Hash for music_torrent.mp3
+                    request_from_hash (hash_3, seeder_ip, DEFAULT_PORT + 3); // Hash for text_file_torrent.txt
+                }
+                start_time = get_time_msec();
+                // print_all_torrents();
+                print_torrent_status ();
+                counter++;
+            }
+        }
+        close_socket(sockfd);
+    }
+    // Peer 2 - (Port 12782)
+    else if (mode == 2)
+    {
+        // Make some files into torrents
+        make_file_into_torrent("snu_logo_torrent.png", "snu_logo.png");         // HASH: 0x279cf7a5
+        // make_file_into_torrent("music_torrent.mp3", "music.mp3");               // HASH: 0x9b7a2926 (source: https://www.youtube.com/watch?v=9PRnPdgNhMI)
+        // Initialize listening socket
+        int sockfd = listen_socket(DEFAULT_PORT + 1);
+        if (sockfd < 0) 
+        {
+            return -1;
+        }
+        // Wait 5 seconds before starting
+        for (int countdown = 5; countdown > 0; countdown--) 
+        {
+            printf("Starting in %d seconds...\r", countdown);
+            fflush(stdout);
+            sleep_ms(1000);
+        }
+        while (1) 
+        {
+            // Run server & client routines concurrently
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+            client_routine();
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+
+            // Take some action every "SLEEP_TIME_MSEC" milliseconds
+            if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
+            {
+                if (1 == counter) 
+                {
+                    // Request torrents from seeder (peer 1), using their hash values
+                    request_from_hash (hash_2, seeder_ip, DEFAULT_PORT); // Hash for music_torrent.mp3
+                    request_from_hash (hash_3, seeder_ip, DEFAULT_PORT); // Hash for text_file_torrent.txt
+                    request_from_hash (hash_4, seeder_ip, DEFAULT_PORT); // Hash for NXC_Lab_intro_torrent.pdf
+
+                    // Request torrents from seeder (peer 3), using their hash values
+                    request_from_hash (hash_2, seeder_ip, DEFAULT_PORT + 2); // Hash for music_torrent.mp3
+                    request_from_hash (hash_3, seeder_ip, DEFAULT_PORT + 2); // Hash for text_file_torrent.txt
+                    request_from_hash (hash_4, seeder_ip, DEFAULT_PORT + 2); // Hash for NXC_Lab_intro_torrent.pdf
+
+                    // Request torrents from seeder (peer 4), using their hash values
+                    request_from_hash (hash_2, seeder_ip, DEFAULT_PORT + 3); // Hash for music_torrent.mp3
+                    request_from_hash (hash_3, seeder_ip, DEFAULT_PORT + 3); // Hash for text_file_torrent.txt
+                    request_from_hash (hash_4, seeder_ip, DEFAULT_PORT + 3); // Hash for NXC_Lab_intro_torrent.pdf
+                }
+                start_time = get_time_msec();
+                // print_all_torrents();
+                print_torrent_status ();
+                counter++;
+            }
+        }
+        close_socket(sockfd);
+    }
+    else if (mode == 3)
+    {
+        // Make some files into torrents
+        make_file_into_torrent("music_torrent.mp3", "music.mp3");                   // HASH: 0x9b7a2926
+        // Initialize listening socket
+        int sockfd = listen_socket(DEFAULT_PORT + 2);
+        if (sockfd < 0) 
+        {
+            return -1;
+        }
+        // Wait 5 seconds before starting
+        for (int countdown = 5; countdown > 0; countdown--) 
+        {
+            printf("Starting in %d seconds...\r", countdown);
+            fflush(stdout);
+            sleep_ms(1000);
+        }
+        while (1) 
+        {
+            // Run server & client routines concurrently
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+            client_routine();
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+
+            // Take some action every "SLEEP_TIME_MSEC" milliseconds
+            if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
+            {
+                if (1 == counter) 
+                {
+                    // Request torrents from seeder (peer 1), using their hash values
+                    request_from_hash (hash_1, seeder_ip, DEFAULT_PORT); // Hash for snu_logo_torrent.png
+                    request_from_hash (hash_3, seeder_ip, DEFAULT_PORT); // Hash for text_file_torrent.txt
+                    request_from_hash (hash_4, seeder_ip, DEFAULT_PORT); // Hash for NXC_Lab_intro_torrent.pdf
+
+                    // Request torrents from seeder (peer 2), using their hash values
+                    request_from_hash (hash_1, seeder_ip, DEFAULT_PORT + 1); // Hash for snu_logo_torrent.png
+                    request_from_hash (hash_3, seeder_ip, DEFAULT_PORT + 1); // Hash for text_file_torrent.txt
+                    request_from_hash (hash_4, seeder_ip, DEFAULT_PORT + 1); // Hash for NXC_Lab_intro_torrent.pdf
+
+                    // Request torrents from seeder (peer 4), using their hash values
+                    request_from_hash (hash_1, seeder_ip, DEFAULT_PORT + 3); // Hash for snu_logo_torrent.png
+                    request_from_hash (hash_3, seeder_ip, DEFAULT_PORT + 3); // Hash for text_file_torrent.txt
+                    request_from_hash (hash_4, seeder_ip, DEFAULT_PORT + 3); // Hash for NXC_Lab_intro_torrent.pdf
+                }
+                start_time = get_time_msec();
+                // print_all_torrents();
+                print_torrent_status ();
+                counter++;
+            }
+        }
+        close_socket(sockfd);
+    }
+    else if (mode == 4)
+    {
+        // Make some files into torrents
+        make_file_into_torrent("text_file_torrent.txt", "text_file.txt");                   // HASH: 0x3dfd2916
+        // Initialize listening socket
+        int sockfd = listen_socket(DEFAULT_PORT + 3);
+        if (sockfd < 0) 
+        {
+            return -1;
+        }
+        // Wait 5 seconds before starting
+        for (int countdown = 5; countdown > 0; countdown--) 
+        {
+            printf("Starting in %d seconds...\r", countdown);
+            fflush(stdout);
+            sleep_ms(1000);
+        }
+        while (1) 
+        {
+            // Run server & client routines concurrently
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+            client_routine();
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+
+            // Take some action every "SLEEP_TIME_MSEC" milliseconds
+            if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
+            {
+                if (1 == counter) 
+                {
+                    // Request torrents from seeder (peer 1), using their hash values
+                    request_from_hash (hash_1, seeder_ip, DEFAULT_PORT); // Hash for snu_logo_torrent.png
+                    request_from_hash (hash_2, seeder_ip, DEFAULT_PORT); // Hash for music_torrent.mp3
+                    request_from_hash (hash_4, seeder_ip, DEFAULT_PORT); // Hash for NXC_Lab_intro_torrent.pdf
+
+                    // Request torrents from seeder (peer 2), using their hash values
+                    request_from_hash (hash_1, seeder_ip, DEFAULT_PORT + 1); // Hash for snu_logo_torrent.png
+                    request_from_hash (hash_2, seeder_ip, DEFAULT_PORT + 1); // Hash for music_torrent.mp3
+                    request_from_hash (hash_4, seeder_ip, DEFAULT_PORT + 1); // Hash for NXC_Lab_intro_torrent.pdf
+
+                    // Request torrents from seeder (peer 4), using their hash values
+                    request_from_hash (hash_1, seeder_ip, DEFAULT_PORT + 2); // Hash for snu_logo_torrent.png
+                    request_from_hash (hash_2, seeder_ip, DEFAULT_PORT + 2); // Hash for music_torrent.mp3
+                    request_from_hash (hash_4, seeder_ip, DEFAULT_PORT + 2); // Hash for NXC_Lab_intro_torrent.pdf
+                }
+                start_time = get_time_msec();
+                // print_all_torrents();
+                print_torrent_status ();
+                counter++;
+            }
+        }
+        close_socket(sockfd);
+    }
+    return 0;
+}*/
+int main(int argc, char *argv[])
+{
+    // Input parsing
+    // Enter IP of the seeder in the first argument. Select peer mode (1 or 2) in the second argument.
+    if (argc != 3) 
+    {
+        printf ("Invalid number of arguments. Usage: ./peer <SEEDER IP> <MODE 1 or 2>\n");
+        return 0;
+    }    
+    int mode = atoi(argv[2]);
+    char *seeder_ip = argv[1];
+    // if (mode != 1 && mode != 2)
+    if(mode < 1 || 4 < mode)
+    {
+        // printf ("Invalid mode. Usage: ./peer <SEEDER IP> <MODE 1 or 2>\n");
+        printf ("Invalid mode. Usage: ./peer <SEEDER IP> <MODE 1 or 2 or 3 or 4>\n");
+        return 0;
+    }
+    if (is_ip_valid(seeder_ip) == 0)
+    {
+        // printf ("Invalid IP address. Usage: ./peer <SEEDER IP> <MODE 1 or 2>\n");
+        printf ("Invalid IP address. Usage: ./peer <SEEDER IP> <MODE 1 or 2 or 3 or 4>\n");
+        return 0;
+    }
+    // if (mode == 1)
+    // {
+    //     printf ("INFO - Running in peer mode 1. Will connect to seeder %s:%d\n", seeder_ip, DEFAULT_PORT + 1);
+    // }
+    // else
+    // {
+    //     printf ("INFO - Running in peer mode 2. Will connect to seeder %s:%d\n", seeder_ip, DEFAULT_PORT);
+    // }
+    printf ("INFO - Running in peer mode %d. Will connect to seeder %s:%d\n", mode, seeder_ip, DEFAULT_PORT + mode - 1);
+
+
+    silent_mode = 0; // Set to 0 to enable debug messages.
+    unsigned int start_time = 0, counter = 0;
+
+    unsigned int hash_1 = 0x279cf7a5; // Hash for snu_logo_torrent.png
+    unsigned int hash_2 = 0x9b7a2926; // Hash for music_torrent.mp3
+    unsigned int hash_3 = 0x3dfd2916; // Hash for text_file_torrent.txt
+    unsigned int hash_4 = 0x1f77b213; // Hash for NXC_Lab_intro_torrent.pdf
+
+    // Peer 1 - (Port 12781)
+    if (mode == 1)
+    {
+        // Make some files into torrents
+        make_file_into_torrent("text_file_torrent.txt", "text_file.txt");           // HASH: 0x3dfd2916
+        make_file_into_torrent("NXC_Lab_intro_torrent.pdf", "NXC_Lab_intro.pdf");   // HASH: 0x1f77b213
+        make_file_into_torrent("snu_logo_torrent.png", "snu_logo.png");         // HASH: 0x279cf7a5
+        make_file_into_torrent("music_torrent.mp3", "music.mp3");                   // HASH: 0x9b7a2926
+        // Initialize listening socket
+        int sockfd = listen_socket(DEFAULT_PORT);
+        if (sockfd < 0) 
+        {
+            return -1;
+        }
+        // Wait 5 seconds before starting
+        for (int countdown = 5; countdown > 0; countdown--) 
+        {
+            printf("Starting in %d seconds...\r", countdown);
+            fflush(stdout);
+            sleep_ms(1000);
+        }
+        while (1) 
+        {
+            // Run server & client routines concurrently
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+            client_routine();
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+
+            // Take some action every "SLEEP_TIME_MSEC" milliseconds
+            if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
+            {
+                if (1 == counter) 
+                {
+                    ;
+                }
+                start_time = get_time_msec();
+                // print_all_torrents();
+                print_torrent_status ();
+                counter++;
+            }
+        }
+        close_socket(sockfd);
+    }
+    // Peer 2 - (Port 12782)
+    else if (mode == 2)
+    {
+        // Make some files into torrents
+        // make_file_into_torrent("snu_logo_torrent.png", "snu_logo.png");         // HASH: 0x279cf7a5
+        // make_file_into_torrent("music_torrent.mp3", "music.mp3");               // HASH: 0x9b7a2926 (source: https://www.youtube.com/watch?v=9PRnPdgNhMI)
+        // Initialize listening socket
+        int sockfd = listen_socket(DEFAULT_PORT + 1);
+        if (sockfd < 0) 
+        {
+            return -1;
+        }
+        // Wait 5 seconds before starting
+        for (int countdown = 5; countdown > 0; countdown--) 
+        {
+            printf("Starting in %d seconds...\r", countdown);
+            fflush(stdout);
+            sleep_ms(1000);
+        }
+        while (1) 
+        {
+            // Run server & client routines concurrently
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+            client_routine();
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+
+            // Take some action every "SLEEP_TIME_MSEC" milliseconds
+            if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
+            {
+                if (1 == counter) 
+                {
+                    // Request torrents from seeder (peer 1), using their hash values
+                    request_from_hash (hash_1, seeder_ip, DEFAULT_PORT); // Hash for snu_logo_torrent.png
+                    request_from_hash (hash_2, seeder_ip, DEFAULT_PORT); // Hash for music_torrent.mp3
+                    request_from_hash (hash_3, seeder_ip, DEFAULT_PORT); // Hash for text_file_torrent.txt
+                    request_from_hash (hash_4, seeder_ip, DEFAULT_PORT); // Hash for NXC_Lab_intro_torrent.pdf
+                }
+                start_time = get_time_msec();
+                // print_all_torrents();
+                print_torrent_status ();
+                counter++;
+            }
+        }
+        close_socket(sockfd);
+    }
+    else if (mode == 3)
+    {
+        // Make some files into torrents
+        // make_file_into_torrent("music_torrent.mp3", "music.mp3");                   // HASH: 0x9b7a2926
+        // Initialize listening socket
+        int sockfd = listen_socket(DEFAULT_PORT + 2);
+        if (sockfd < 0) 
+        {
+            return -1;
+        }
+        // Wait 5 seconds before starting
+        for (int countdown = 5; countdown > 0; countdown--) 
+        {
+            printf("Starting in %d seconds...\r", countdown);
+            fflush(stdout);
+            sleep_ms(1000);
+        }
+        while (1) 
+        {
+            // Run server & client routines concurrently
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+            client_routine();
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+
+            // Take some action every "SLEEP_TIME_MSEC" milliseconds
+            if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
+            {
+                if (1 == counter) 
+                {
+                    // Request torrents from seeder (peer 2), using their hash values
+                    request_from_hash (hash_1, seeder_ip, DEFAULT_PORT + 1); // Hash for snu_logo_torrent.png
+                    request_from_hash (hash_2, seeder_ip, DEFAULT_PORT + 1); // Hash for music_torrent.mp3
+                    request_from_hash (hash_3, seeder_ip, DEFAULT_PORT + 1); // Hash for text_file_torrent.txt
+                    request_from_hash (hash_4, seeder_ip, DEFAULT_PORT + 1); // Hash for NXC_Lab_intro_torrent.pdf
+                }
+                start_time = get_time_msec();
+                // print_all_torrents();
+                print_torrent_status ();
+                counter++;
+            }
+        }
+        close_socket(sockfd);
+    }
+    else if (mode == 4)
+    {
+        // Make some files into torrents
+        // make_file_into_torrent("text_file_torrent.txt", "text_file.txt");                   // HASH: 0x3dfd2916
+        // Initialize listening socket
+        int sockfd = listen_socket(DEFAULT_PORT + 3);
+        if (sockfd < 0) 
+        {
+            return -1;
+        }
+        // Wait 5 seconds before starting
+        for (int countdown = 5; countdown > 0; countdown--) 
+        {
+            printf("Starting in %d seconds...\r", countdown);
+            fflush(stdout);
+            sleep_ms(1000);
+        }
+        while (1) 
+        {
+            // Run server & client routines concurrently
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+            client_routine();
+            server_routine(sockfd, seeder_ip, DEFAULT_PORT + mode - 1);
+
+            // Take some action every "SLEEP_TIME_MSEC" milliseconds
+            if (start_time == 0 || start_time + SLEEP_TIME_MSEC < get_time_msec())
+            {
+                if (1 == counter) 
+                {
+                    // Request torrents from seeder (peer 3), using their hash values
+                    request_from_hash (hash_1, seeder_ip, DEFAULT_PORT + 2); // Hash for snu_logo_torrent.png
+                    request_from_hash (hash_2, seeder_ip, DEFAULT_PORT + 2); // Hash for music_torrent.mp3
+                    request_from_hash (hash_3, seeder_ip, DEFAULT_PORT + 2); // Hash for text_file_torrent.txt
+                    request_from_hash (hash_4, seeder_ip, DEFAULT_PORT + 2); // Hash for NXC_Lab_intro_torrent.pdf
+                }
+                start_time = get_time_msec();
+                // print_all_torrents();
+                print_torrent_status ();
                 counter++;
             }
         }

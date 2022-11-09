@@ -75,7 +75,7 @@ int close_socket(int sockfd);
     Note that hash values are sent as string characters of hexadecimal values, and integer values are sent as string characters of decimal values.
     Ex. Requesting torrent info from peer - Protocol: "REQUEST_TORRENT [MY_LISTEN_PORT] [MY_ID_HASH] [TORRENT_HASH]"
     If my listening port is 12781, my id_hash is 0xabcd1234 (2882343476), and the torrent hash is 0x1234abcd (305441741):
-    A packet with the string "REQUEST_TORRENT 12781 asdf1234 1234abcd" is sent to the peer.
+    A packet with the string "REQUEST_TORRENT 12781 abcd1234 1234abcd" is sent to the peer.
 */
 
 // Request torrent INFO from a remote host. Returns 0 on success.
