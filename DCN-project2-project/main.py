@@ -11,7 +11,7 @@ START_TIME = 0
 END_TIME = 5
 
 # bandwidth 
-BW_HIGH = MBytes(5)  # 40M bit
+BW_HIGH = KBytes(12)  # 40M bit
 
 # Default variables
 PKT_SIZE = int(1450)

@@ -1,19 +1,33 @@
 import scipy.stats as stats 
+import scipy.stats as stats 
 
 # Default variables
 PKT_SIZE = int(1450)
 PKT_NUMS = int(2000)
 PROP_TIME = int(10)
+START_TIME = 0 
+END_TIME = 5
 
-def transmit(t, seq_start, size, channel):
-    start = seq_start; pkt_size = size; time = t
+def transmit(t, size, channel, remained):
+    # current available bandwidth (remained bw from prev time + current bw)
+    pkt_size = size; time = t
+    bw = remained + channel.bw[time]
+    num_packets = 0
 
-    while pkt_size > 0:
-        pkt_size -= channel.bw[time]
+    # get the number of packets that can be transmitted at time t and remained bw at time t
+    num_packets += int(bw / pkt_size)
+    remained_bw = int(bw % pkt_size)
+
+    # if current bw is not sufficient
+    while num_packets < 1:
+        if time == int(END_TIME*1000) - 1: # ms
+            break
         time += 1
-    
-    # return tx time for a packet and next sequence of packets to send next
-    return time - t, start + 1
+        bw = remained_bw + channel.bw[time]
+        num_packets += int(bw / pkt_size)
+        remained_bw = int(bw % pkt_size)
+
+    return time - t + 1, num_packets, remained_bw
 
 class Channel():
     def __init__(self, bandwidth):
@@ -45,12 +59,12 @@ class BaseStation():
         self.queue_length = threshold
         self.queued = []
         self.next_available = 0
-
+        self.remained_bw = 0 # available bw from prev timestep
+        
     def admit(self, t, pkts, downlink):
         loss = []; admit = []
 
-        # if bs transmission is busy, only queue packets (not transmit)
-        if t < self.next_available:
+        if self.next_available != 0 and self.next_available > t:
             # drop or queue
             for p in pkts:
                 if len(self.queued) >= self.queue_length:
@@ -62,14 +76,18 @@ class BaseStation():
 
         # downlink admit or not
         if len(self.queued) > 0:
-            p = self.queued.pop(0)
-            tx_time, _ = transmit(t, p.seq, PKT_SIZE, downlink)
-            p.recv_arrival = t + tx_time + PROP_TIME
-            admit.append(p)
-
-            # next available time
+            tx_time, num_packets, remained_bw = transmit(t, PKT_SIZE, downlink, self.remained_bw)
+            self.remained_bw = remained_bw
             self.next_available = t + tx_time
-        
+
+            for i in range(0, num_packets):
+                p = self.queued.pop(0)
+                p.recv_arrival = t + tx_time + PROP_TIME
+                admit.append(p)
+                # exit if list is empty
+                if len(self.queued) == 0:
+                    break
+                
         # drop or queue
         for p in pkts:
             if len(self.queued) >=  self.queue_length:
@@ -77,7 +95,7 @@ class BaseStation():
             else:
                 self.queued.append(p)
         
-        # return transmit list and dropped packet
+        
         return admit, loss
 
 class Client():
@@ -89,7 +107,8 @@ class Client():
         self.tx_start = 0; # pointer for first transmitted packet (tx_window)
         self.seq = 0 # pointer for next packet sequence (tx_window)
         self.next_available = 0
-
+        self.remained_bw = 0
+        
         # variables for clients
         self.channel = Channel(bandwidth)
         
@@ -131,17 +150,19 @@ class Client():
         
         # without congestion control: send packets with max bandwidth
         if (self.cc == False):
-            tx_time, next_seq = transmit(t, self.seq, PKT_SIZE, self.channel)
-            self.pkt_list[self.seq].start_time = t
-            self.pkt_list[self.seq].bs_arrival = t + tx_time + PROP_TIME
-            pkts.append(self.pkt_list[self.seq])
+            tx_time, num_packets, remained_bw = transmit(t, PKT_SIZE, self.channel, self.remained_bw)
+            self.remained_bw = remained_bw
+
+            for i in range(0, num_packets):
+                self.pkt_list[self.seq].start_time = t
+                self.pkt_list[self.seq].bs_arrival = t + tx_time + PROP_TIME
+                pkts.append(self.pkt_list[self.seq])
+                self.seq += 1
+                if self.seq == PKT_NUMS:
+                    break
             
             # next available transmit
             self.next_available = t + tx_time # ms
-
-            # point next sequence
-            self.seq = next_seq
-        
         ############### IMPLEMENT #####################################
         # with congestion control: send packets with cwnd
         # implement your send function with congestion control! (cwnd)
