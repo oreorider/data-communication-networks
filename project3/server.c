@@ -111,78 +111,101 @@ void forward(int sock) {
   
   printf("-----------------------------------\n");
   printf("%s\n", buffer);
-  if(strstr(buffer, "snu.nxclab.org")==NULL) return;//only process nxclab.org
 
-  //struct hostent* hostentry = gethostbyname("snu.nxclab.org");
-  
-  int sockfd;
-
-  char domain_name[100] = "snu.nxclab.org";//NEED TO MAKE THIS DYNAMIC? or is it good? idk
-
-  struct addrinfo hints, *results;
-
-  struct sockaddr_in serv_addr;
-
-  memset(&hints, 0, sizeof(hints));
-  hints.ai_family = AF_INET;
-  hints.ai_socktype = SOCK_STREAM;
-
-  if(getaddrinfo(domain_name, "7777", &hints, &results) != 0){
-    perror("domain name error");
-    exit(1);
-  }
-  sockfd = socket(results->ai_family, results->ai_socktype, results->ai_protocol);
-
-  connect(sockfd, results->ai_addr, results->ai_addrlen);
-  printf("server connected\n");
-
-  
-  char* after_slash_ptr = strstr(buffer, "snu.nxclab.org") + 19;
-  char* before_http_ptr = strstr(buffer, "HTTP/1.1")-1;
-  printf("test\n");
-  char details[100];
-  int detail_length = before_http_ptr - after_slash_ptr;
-  printf("detail length is %d\n", detail_length);
-
-  int index = 0;
-  while(after_slash_ptr != before_http_ptr){
-    details[index] = *after_slash_ptr;
-    after_slash_ptr+=1;
-    index+=1;
-  }
-  details[detail_length] = '\0';
-  printf("detail is %s\n", details);
-
-  
-  char* newline_ptr = strstr(buffer, "\n");
-  char* buffer_end = strstr(buffer, "\r\n\r\n")+4;
-  char remainder[9000];
-  strncpy(remainder, newline_ptr, buffer_end-newline_ptr);
-  buffer_end = '\0';
-
-  char* messsage_to_send;
-  asprintf(&messsage_to_send, "%s %s %s%s", "GET", details, "HTTP/1.1", remainder);
-  printf("sending message\n\n%s\n", messsage_to_send);
-  send(sockfd, messsage_to_send, strlen(messsage_to_send), 0);
-
-  char receive_buffer[9000]
-
-  do{
-      bytes = recv(newsockfd, buf+offset, 1500, 0);
+  if(strstr(buffer, "GET / HTTP/1.1") != NULL){//if from server to computer
+    printf("nxclab givng data to computer\n");
+    char receive_buffer[9000];
+    bzero(receive_buffer, 9000);
+    int sockfd = 0;
+    do{
+      bytes = recv(sockfd, receive_buffer+offset, 1500, 0);
       offset += bytes;
-      if (strncmp(buf + offset - 4, "\r\n\r\n", 4) == 0) break; //if end of http
+      if (strncmp(receive_buffer + offset - 4, "\r\n\r\n", 4) == 0) break; //if end of http
     } while(bytes > 0);
     printf("message received\n");
 
-  if(bytes < 0){
+    if(bytes < 0){
       perror("receive error");
       exit(1);
     }
     else if (bytes == 0){
       perror("client disconneced unexpectedly");
       exit(1);
+      }
+    printf("-----------------------------------\n");
+    printf("%s\n", receive_buffer);
+  }
+
+  else if(strstr(buffer, "snu.nxclab.org")!=NULL){//if from phone to snu.nxclab.org
+    printf("phone asking computer for nxclab\n");
+    int sockfd;
+    char domain_name[100] = "snu.nxclab.org";//NEED TO MAKE THIS DYNAMIC? or is it good? idk
+    struct addrinfo hints, *results;
+    struct sockaddr_in serv_addr;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if(getaddrinfo(domain_name, "7777", &hints, &results) != 0){
+      perror("domain name error");
+      exit(1);
     }
 
+    struct sockaddr_in *sin = (struct sockaddr_in *) results->ai_addr;;
+    
+    printf("value of ip addr: %.*s\n", (int)results->ai_addrlen, inet_ntoa(sin->sin_addr));
+
+
+    sockfd = socket(results->ai_family, results->ai_socktype, results->ai_protocol);
+    connect(sockfd, results->ai_addr, results->ai_addrlen);
+    printf("server connected\n");
+
+    //string manipulation, remove domain, leave only the thing after / ex) /index.html
+    char* after_slash_ptr = strstr(buffer, "snu.nxclab.org") + 19;
+    char* before_http_ptr = strstr(buffer, "HTTP/1.1")-1;
+    char details[100];
+    int detail_length = before_http_ptr - after_slash_ptr;
+    printf("detail length is %d\n", detail_length);
+    int index = 0;
+    while(after_slash_ptr != before_http_ptr){
+      details[index] = *after_slash_ptr;
+      after_slash_ptr+=1;
+      index+=1;
+    }
+    details[detail_length] = '\0';
+    printf("detail is %s\n", details);
+
+    //string manipulation, get the rest of the message
+    char* newline_ptr = strstr(buffer, "\n");
+    char* buffer_end = strstr(buffer, "\r\n\r\n")+4;
+    char remainder[9000];
+    strncpy(remainder, newline_ptr, buffer_end-newline_ptr);
+    buffer_end = '\0';
+
+    //concatonate everything into message_to_send
+    char* messsage_to_send;
+    asprintf(&messsage_to_send, "%s %s %s%s", "GET", details, "HTTP/1.1", remainder);
+    printf("sending message\n\n%s\n", messsage_to_send);
+    int length = strlen(messsage_to_send);
+
+    printf("length is %d\n", length);
+
+    //send the message and close socket
+    while(length > 0){
+      
+      bytes = send(sockfd, messsage_to_send, length, 0);
+      printf("send bytes : %d\n", bytes);
+      length = length - bytes;
+    }
+    printf("socket closing\n");
+    shutdown(sockfd, SHUT_RDWR);
+    close(sockfd);
+    printf("socket closed\n");
+
+  }
+  
+  
   /*
 
   bzero((char*) &serv_addr, sizeof(serv_addr));//memset
