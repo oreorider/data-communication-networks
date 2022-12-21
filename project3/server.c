@@ -141,7 +141,7 @@ void forward(int sock) {
     int sockfd;
     char domain_name[100] = "snu.nxclab.org";//NEED TO MAKE THIS DYNAMIC? or is it good? idk
     struct addrinfo hints, *results;
-    struct sockaddr_in serv_addr;
+    //struct sockaddr_in serv_addr;
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -156,9 +156,20 @@ void forward(int sock) {
     
     printf("value of ip addr: %.*s\n", (int)results->ai_addrlen, inet_ntoa(sin->sin_addr));
 
-
     sockfd = socket(results->ai_family, results->ai_socktype, results->ai_protocol);
-    connect(sockfd, results->ai_addr, results->ai_addrlen);
+    if(sockfd == -1){
+      perror("socket error");
+      exit(1);
+    }
+
+    
+
+    printf("socket created\n");
+    if(connect(sockfd, results->ai_addr, results->ai_addrlen) == -1){
+      perror("connection failed");
+      exit(1);
+    }
+    freeaddrinfo(results);
     printf("server connected\n");
 
     //string manipulation, remove domain, leave only the thing after / ex) /index.html
