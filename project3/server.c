@@ -110,7 +110,7 @@ void forward(int sock) {
   }
   
   printf("-----------------------------------\n");
-  printf("%s\n", buffer);
+  printf("%s", buffer);
 
   if(strstr(buffer, "snu.nxclab.org")!=NULL){//if from phone to computer
     printf("phone asking computer for nxclab\n");
@@ -166,15 +166,15 @@ void forward(int sock) {
 
     //string manipulation, get the rest of the message
     char* newline_ptr = strstr(buffer, "\n");
-    char* buffer_end = strstr(buffer, "\r\n\r\n")+4;
+    char* buffer_end = strstr(buffer, "\r\n\r\n")+5;
     char remainder[9000];
     strncpy(remainder, newline_ptr, buffer_end-newline_ptr);
-    buffer_end = '\0';
+    buffer_end[buffer_end-newline_ptr] = '\0';
 
     //concatonate everything into message_to_send
     char* messsage_to_send;
     asprintf(&messsage_to_send, "%s %s %s%s", "GET", details, "HTTP/1.1", remainder);
-    printf("=============message to send to nxcserver============\n\n%s\n", messsage_to_send);
+    printf("=============message to send to nxcserver============\n\n%s", messsage_to_send);
     int length = strlen(messsage_to_send);
 
     printf("length is %d\n", length);
@@ -196,31 +196,64 @@ void forward(int sock) {
     bzero(receive_buffer, 9000);
     offset = 0;
     bytes = 0;
-
+    
     do{
+      
       bytes = read(sockfd, receive_buffer+offset, 1500);
+      
+      //printf("bytes is %d\n", bytes);
       offset += bytes;
-      if (strncmp(receive_buffer + offset - 4, "\r\n\r\n", 4) == 0) break; //if end of http
+      printf("offset is %d\n", offset);
+      
+      //EMPTY BUFFER BY SENDING
+      if(offset > 7500){//buffer is full, must empty by sending to phone first
+        printf("buffer full, cant receive any more\n");
+        //send data currently in receive_buffer to phone
+        length = offset;
+        while(length > 0){
+          int bytes_send = send(sock, receive_buffer, length, 0);
+          printf("sedning %d bytes to phone\n", bytes_send);
+          length=length-bytes_send;
+        }
+        printf("sent %s\n", receive_buffer);
+        if (strncmp(receive_buffer + offset - 4, "\r\n\r\n", 4) == 0) {
+          printf("reached end of message\n");
+        }
+        bzero(receive_buffer, 9000);//empty data in receive buffer that has already been sent to phone
+        offset=0;//make offset 0 to continue receiving data
+      }
+      else{
+        if (strncmp(receive_buffer + offset - 4, "\r\n\r\n", 4) == 0) {
+          printf("reached end of message\n");
+          break; //if end of http
+        }
+        
+        /*if(strstr(receive_buffer, "\r\n\r\n") != NULL){
+          printf("reached end of message\n");
+          break;
+        }*/
+        
+      }
     } while(bytes > 0);
-    //bytes = read(sockfd, buffer, 9000);
+    //bytes = read(sockfd, receive_buffer, 9000);
     //printf("message received\n");
     //printf("receive bytes : %d\n", bytes);
-    //printf("%s\n", buffer);
+    //printf("%s\n", receive_buffer);
     
     if(bytes < 0){
       perror("receive error");
       exit(1);
     }
-    else if (bytes == 0){
-      perror("client disconneced unexpectedly");
-      exit(1);
-    }
+    //else if (bytes == 0){
+    //  perror("client disconneced unexpectedly");
+    //  exit(1);
+    //}
 
-    receive_buffer[offset] = 0;
+    //receive_buffer[offset+1] = '\0';
     //char printbuffer[9000];
     //strncpy(printbuffer, buffer, bytes);
     //printbuffer[bytes] = '\0';
-    printf("received message from nxc server\n%s", receive_buffer);
+    printf("MESSAGE FROM NXC SERVER\n\n%s||||", receive_buffer);
     
     printf("========received message from nxc server==============\n\n");
 
@@ -233,13 +266,7 @@ void forward(int sock) {
     printf("=========sending message to phone===========\n");
 
     printf("sending %d bytes to phone\n", bytes);
-    length = bytes;
-    //use socket that received initial phone message
-    while(length > 0){
-      bytes = send(sock, buffer, length, 0);
-      printf("send bytes : %d\n", bytes);
-      length = length - bytes;
-    }
+    bytes = send(sock, receive_buffer, offset, 0);
     printf("============message sent to phone===========\n\n");
 
   }
