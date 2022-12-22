@@ -174,7 +174,7 @@ void forward(int sock) {
     //concatonate everything into message_to_send
     char* messsage_to_send;
     asprintf(&messsage_to_send, "%s %s %s%s", "GET", details, "HTTP/1.1", remainder);
-    printf("sending message\n\n%s\n", messsage_to_send);
+    printf("=============message to send to nxcserver============\n\n%s\n", messsage_to_send);
     int length = strlen(messsage_to_send);
 
     printf("length is %d\n", length);
@@ -185,23 +185,29 @@ void forward(int sock) {
       printf("send bytes : %d\n", bytes);
       length = length - bytes;
     }
-    printf("socket closing\n");
-    shutdown(sockfd, SHUT_RDWR);
-    close(sockfd);
-    printf("socket closed\n");
+    printf("===========message sent to nxc server============\n\n");
+    
 
     //reset buffer
-    bzero(buffer, 9000);
-
+    //bzero(buffer, 9000);
     //read incoming packet from server to computer
+    printf("==========receiving message from nxc server===========\n");
+    char receive_buffer[9000];
+    bzero(receive_buffer, 9000);
+    offset = 0;
+    bytes = 0;
+
     do{
-      bytes = recv(newsockfd, buf+offset, 1500, 0);
+      bytes = read(sockfd, receive_buffer+offset, 1500);
       offset += bytes;
-      if (strncmp(buf + offset - 4, "\r\n\r\n", 4) == 0) break; //if end of http
+      if (strncmp(receive_buffer + offset - 4, "\r\n\r\n", 4) == 0) break; //if end of http
     } while(bytes > 0);
-    printf("message received\n");
+    //bytes = read(sockfd, buffer, 9000);
+    //printf("message received\n");
+    //printf("receive bytes : %d\n", bytes);
+    //printf("%s\n", buffer);
     
-        if(bytes < 0){
+    if(bytes < 0){
       perror("receive error");
       exit(1);
     }
@@ -209,6 +215,32 @@ void forward(int sock) {
       perror("client disconneced unexpectedly");
       exit(1);
     }
+
+    receive_buffer[offset] = 0;
+    //char printbuffer[9000];
+    //strncpy(printbuffer, buffer, bytes);
+    //printbuffer[bytes] = '\0';
+    printf("received message from nxc server\n%s", receive_buffer);
+    
+    printf("========received message from nxc server==============\n\n");
+
+    //close socket with nxc server
+    printf("socket with nxc server closing\n");
+    shutdown(sockfd, SHUT_RDWR);
+    close(sockfd);
+    printf("socket with nxc server closed\n\n");
+
+    printf("=========sending message to phone===========\n");
+
+    printf("sending %d bytes to phone\n", bytes);
+    length = bytes;
+    //use socket that received initial phone message
+    while(length > 0){
+      bytes = send(sock, buffer, length, 0);
+      printf("send bytes : %d\n", bytes);
+      length = length - bytes;
+    }
+    printf("============message sent to phone===========\n\n");
 
   }
   
