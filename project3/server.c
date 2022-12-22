@@ -112,31 +112,7 @@ void forward(int sock) {
   printf("-----------------------------------\n");
   printf("%s\n", buffer);
 
-  if(strstr(buffer, "GET / HTTP/1.1") != NULL){//if from server to computer
-    printf("nxclab givng data to computer\n");
-    char receive_buffer[9000];
-    bzero(receive_buffer, 9000);
-    int sockfd = 0;
-    do{
-      bytes = recv(sockfd, receive_buffer+offset, 1500, 0);
-      offset += bytes;
-      if (strncmp(receive_buffer + offset - 4, "\r\n\r\n", 4) == 0) break; //if end of http
-    } while(bytes > 0);
-    printf("message received\n");
-
-    if(bytes < 0){
-      perror("receive error");
-      exit(1);
-    }
-    else if (bytes == 0){
-      perror("client disconneced unexpectedly");
-      exit(1);
-      }
-    printf("-----------------------------------\n");
-    printf("%s\n", receive_buffer);
-  }
-
-  else if(strstr(buffer, "snu.nxclab.org")!=NULL){//if from phone to snu.nxclab.org
+  if(strstr(buffer, "snu.nxclab.org")!=NULL){//if from phone to computer
     printf("phone asking computer for nxclab\n");
     int sockfd;
     char domain_name[100] = "snu.nxclab.org";//NEED TO MAKE THIS DYNAMIC? or is it good? idk
@@ -147,12 +123,13 @@ void forward(int sock) {
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
 
-    if(getaddrinfo(domain_name, "7777", &hints, &results) != 0){
+    if(getaddrinfo(domain_name, "9000", &hints, &results) != 0){
       perror("domain name error");
       exit(1);
     }
 
-    struct sockaddr_in *sin = (struct sockaddr_in *) results->ai_addr;;
+    struct sockaddr_in *sin = (struct sockaddr_in *) results->ai_addr;
+    char* ip;
     
     printf("value of ip addr: %.*s\n", (int)results->ai_addrlen, inet_ntoa(sin->sin_addr));
 
@@ -202,9 +179,8 @@ void forward(int sock) {
 
     printf("length is %d\n", length);
 
-    //send the message and close socket
+    //send the message
     while(length > 0){
-      
       bytes = send(sockfd, messsage_to_send, length, 0);
       printf("send bytes : %d\n", bytes);
       length = length - bytes;
@@ -213,6 +189,26 @@ void forward(int sock) {
     shutdown(sockfd, SHUT_RDWR);
     close(sockfd);
     printf("socket closed\n");
+
+    //reset buffer
+    bzero(buffer, 9000);
+
+    //read incoming packet from server to computer
+    do{
+      bytes = recv(newsockfd, buf+offset, 1500, 0);
+      offset += bytes;
+      if (strncmp(buf + offset - 4, "\r\n\r\n", 4) == 0) break; //if end of http
+    } while(bytes > 0);
+    printf("message received\n");
+    
+        if(bytes < 0){
+      perror("receive error");
+      exit(1);
+    }
+    else if (bytes == 0){
+      perror("client disconneced unexpectedly");
+      exit(1);
+    }
 
   }
   
