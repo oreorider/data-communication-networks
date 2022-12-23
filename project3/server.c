@@ -69,6 +69,7 @@ int main( int argc, char *argv[] ) {
       exit(1);
     }
     forward(newsockfd);
+    close(newsockfd);
   }
 
   return 0;
@@ -505,7 +506,7 @@ void forward(int sock) {
 }
 #endif
 
-#if ENABLECODE //kdy
+#if ENABLECODE 
 void forward(int sock) {
   int offset, bytes;
   char buffer[BUFFER_SIZE];
@@ -569,11 +570,6 @@ void forward(int sock) {
 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(9000);
-
-    if(inet_pton(AF_INET, "147.46.132.8", &serv_addr.sin_addr) <= 0){
-      printf("invalid address\n");
-    }
-
 
     //printf("socket created\n");
     if(sockconnection = connect(sockfd, results->ai_addr, results->ai_addrlen) == -1){
@@ -782,6 +778,8 @@ void forward(int sock) {
             Replace 20xx-xxxxx to your student id (ex. 20xx-xxxxx --> 2012-34567)
             And change the order of image displayed in browser */
   } 
+
+
 }
 #endif
 
