@@ -1,6 +1,7 @@
 #define _GNU_SOURCE 1
 #define ENABLECODE 1
 #define DISABLECODE 0
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -176,7 +177,7 @@ int main( int argc, char *argv[] ) {
             And change the order of image displayed in browser
       
  */
-#if !ENABLECODE //kyle
+#if !ENABLECODE 
 void forward(int sock) {
   int offset, bytes;
   char buffer[BUFFER_SIZE];
@@ -578,45 +579,7 @@ void forward(int sock) {
     }
     freeaddrinfo(results);
     //printf("server connected\n");
-    #if !ENABLECODE //kdy
-    //string parsing start
-    char* after_slash_ptr = strstr(buffer, ":9000") + 5;
-    char* before_http_ptr = strstr(buffer, "HTTP/1.1")-1;
-    //int size_of_message = offset;
-    char details[BUFFER_SIZE];
-    //bzero(details, BUFFER_SIZE);
-    int detail_length = before_http_ptr - after_slash_ptr;
-    printf("detail length is %d\n", detail_length);
 
-    int index = 0;
-    while(after_slash_ptr != before_http_ptr){
-      details[index] = *after_slash_ptr;
-      after_slash_ptr+=1;
-      index+=1;
-    }
-    details[detail_length] = '\0';
-    printf("detail is >%s<\n", details);
-
-    char* newline_ptr = strstr(buffer, "\r");
-    char* buffer_end = buffer+offset;//pointer to the element next to the last 
-
-    char remainder[BUFFER_SIZE];
-
-    strncpy(remainder, newline_ptr, buffer_end-newline_ptr);
-    buffer_end = "\0";
-
-    char* message_to_send;
-    asprintf(&message_to_send, "%s%s%s%s", "GET ", details, " HTTP/1.1", remainder);
-    //string parsing end
-    
-    bytes = send(sockfd, message_to_send, strlen(message_to_send), 0);
-    printf("message sent to server is:\n%s\n",message_to_send);
-    printf("sent bytes : %d\n\n", bytes);
-    //sleep(1);//account for various delays
-    
-    #endif
-
-    #if ENABLECODE //kyle
     //string manipulation, remove domain, leave only the thing after / ex) /index.html
     char* after_slash_ptr = strstr(buffer, ":9000") + 5;
     char* before_http_ptr = strstr(buffer, "HTTP/1.1")-1;
@@ -659,8 +622,6 @@ void forward(int sock) {
     //bytes = send(sockfd, message_to_send, length, 0);
     printf("=============message to send to nxcserver============\n\n%s", message_to_send);
     printf("===========message sent to nxc server============\n\n");
-    
-    #endif
 
     char receive_buffer[BUFFER_SIZE];
     bzero(receive_buffer, BUFFER_SIZE);
@@ -744,7 +705,9 @@ void forward(int sock) {
 
 
     printf("========received message from nxc server==============\n\n");
-    if(offset < 2000) printf("message received is:\n%s\n",receive_buffer);
+    if(offset < 2000){
+      printf("message received is:\n%s\n",receive_buffer);
+    }
     else{
       printf("message received is \n");
       for(int i=offset - 2000; i<offset; i++){
@@ -755,8 +718,84 @@ void forward(int sock) {
     printf("received bytes : %d\n\n", offset);
     // closing the connected socket with the nxc server
 
+    //attempt to decode html, modify, then re-encode, but waste of time becuase too difficult
+    /*
+    if(strstr(receive_buffer, "Content-Type: text/html")!=NULL){//html file found, must modify
+      char* start_of_html = strstr(receive_buffer, "\r\n\r\n")+4;//points to first char of html
+      char* end_of_html = strstr(start_of_html+1, "\r\n\r\n");//ponits to last element+1
+      char html_message [BUFFER_SIZE];
+      index = 0;
+      printf("HTML content found\n");
+      while(start_of_html != end_of_html){
+        html_message[index] = *start_of_html;
+        index+=1;
+        printf("%02X ", *start_of_html);
+      }
+    }
+    uLong ucompSize = offset+1;
+    */
+    #if ENABLECODE
+    char* httpflag = strstr(receive_buffer, "HTTP/1.1 200 OK");
+    int main_index_flag = (httpflag!=NULL && strstr(receive_buffer, "638d92f5-501") != NULL);
+    int test_index_flag = (httpflag!=NULL && strstr(receive_buffer, "638d9312-1a2a")!= NULL);
+
     printf("=========sending message to phone===========\n");
-    bytes = send(sock, receive_buffer, offset,0);
+    //just send normally if not index files
+    if(main_index_flag==0 && test_index_flag == 0) bytes = send(sock, receive_buffer, offset,0);
+    else{//if index files
+      printf("INDEX FILES\n");
+      FILE *file;
+      if(main_index_flag==1){
+        file = fopen("main_index.html", "r");
+        main_index_flag = 0;
+        printf("OPEN HTML\n");
+      }
+      else if(test_index_flag == 1){
+        file = fopen("test_index.html", "r");
+        printf("OPEN TEST\n");
+        test_index_flag = 0;
+      }
+      fseek(file, 0, SEEK_END);//set file pointer to end to find length
+      length = ftell(file);
+      printf("length is %d\n", length);
+      fseek(file, 0, SEEK_SET);//set file pointer to the beginning
+
+      char* html_buffer = calloc(sizeof(char), length+1);
+      if(html_buffer > 0){
+        fread(html_buffer, 1, length, file);
+      }
+      fclose(file);
+      //html_buffer[length] = '\0';
+      
+      char header[] = "HTTP/1.1 200 OK\r\nContent-Type: text/html;\r\n\r\n";
+
+      int header_length = strlen(header);
+      while(header_length > 0){
+        bytes = send(sock, header, header_length, 0);
+        printf("sent %d bytes for header\n", bytes);
+        header_length -= bytes;
+      }
+
+      int html_length = strlen(html_buffer);
+      while(html_length > 0){
+        bytes = send(sock, html_buffer, html_length, 0);
+        printf("sent %d bytes for html file\n", bytes);
+        html_length -= bytes;
+      }
+
+      char footer[] = "\r\n\r\n";
+      int footer_length = strlen(footer);
+      while(footer_length > 0){
+        bytes = send(sock, footer, footer_length, 0);
+        printf("sent %d bytes for footer\n", bytes);
+        footer_length -= bytes;
+      }
+      free(html_buffer);
+    }
+    #endif
+
+    
+
     if(bytes == -1){
       perror("send error");
       return;
@@ -783,23 +822,5 @@ void forward(int sock) {
 }
 #endif
 
-char *replace_str(char *str, char *orig, char *rep, int start)
-{
-  static char temp[BUFFER_SIZE];
-  static char buffer[BUFFER_SIZE];
-  char *p;
 
-  strcpy(temp, str + start);
-
-  if(!(p = strstr(temp, orig)))  // Is 'orig' even in 'temp'?
-    return temp;
-
-  strncpy(buffer, temp, p-temp); // Copy characters from 'temp' start to 'orig' str
-  buffer[p-temp] = '\0';
-
-  sprintf(buffer + (p - temp), "%s%s", rep, p + strlen(orig));
-  sprintf(str + start, "%s", buffer);    
-
-  return str;
-}
 
